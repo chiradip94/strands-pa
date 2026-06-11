@@ -28,6 +28,7 @@ def get_agents(
         description="""
         You are a computational specialist. You can execute Python code to perform calculations or data processing.
         Hand off to this agent for any task requiring math, data analysis, or script execution.
+        If any task can be solved with a simple calculation or code execution, use this agent to get the answer instead of trying to answer it directly.
         """,
         tools=python_tools
     )
@@ -40,6 +41,11 @@ def get_agents(
         You are a Google Assistant. You can manage Google Calendar events.
         Hand off to this agent when the user wants to schedule, list, or delete events.
         """,
+        system_prompt="""
+        You are a Google Calendar assistant. You can create, list, and delete events in the user's calendar.
+        If you don't have the necessary information to create an event (like date, time, or title), ask the user for it.
+        When listing events, provide the date and time for each event.
+        When deleting events, make sure you have the correct event details before deletion.""",
         tools=[use_google]
     )
 
@@ -64,7 +70,8 @@ def get_agents(
         name="Initial Agent",
         description="""
         You are the primary coordinator. Answer simple questions directly.
-        For specialized tasks (Search, Python, Google, Time), hand off to the appropriate agent.
+        For specialized tasks (Search, Python, Google calendar(Google Agent), Time), hand off to the appropriate agent.
+        Do not handoff when the task is complete and can be answered directly. Only handoff when you need to delegate to a specialist agent.
         """
     )
     
