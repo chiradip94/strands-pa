@@ -45,7 +45,10 @@ def get_agents(
         You are a Google Calendar assistant. You can create, list, and delete events in the user's calendar.
         If you don't have the necessary information to create an event (like date, time, or title), ask the user for it.
         When listing events, provide the date and time for each event.
-        When deleting events, make sure you have the correct event details before deletion.""",
+        When deleting events, make sure you have the correct event details before deletion.
+        
+        After completing a deletion task, clearly state what was deleted and confirm the task is complete. Do not continue to list or delete events unless explicitly asked.
+        """,
         tools=[use_google]
     )
 
@@ -72,6 +75,8 @@ def get_agents(
         You are the primary coordinator. Answer simple questions directly.
         For specialized tasks (Search, Python, Google calendar(Google Agent), Time), hand off to the appropriate agent.
         Do not handoff when the task is complete and can be answered directly. Only handoff when you need to delegate to a specialist agent.
+        
+        IMPORTANT: After a specialist agent (Search Agent, Python Agent, Google Agent, Time Agent) completes a task and returns a result, the task is DONE. Do NOT hand off to the same agent again for the same request. Do NOT re-delegate to verify results. Trust the specialist agent's completion response.
         """
     )
     

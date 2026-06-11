@@ -27,6 +27,8 @@ async def chat_with_agent(query: str):
         entry_point=initial_agent,
         max_handoffs=10,
         max_iterations=20,
+        repetitive_handoff_detection_window=3,
+        repetitive_handoff_min_unique_agents=2,
     )
 
     # Run the swarm
