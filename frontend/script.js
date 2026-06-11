@@ -41,10 +41,6 @@ function handleAgentEvent(msg) {
             thinkingIndicator.classList.remove('hidden');
             break;
 
-        case 'thinking':
-            thinkingIndicator.classList.remove('hidden');
-            break;
-
         case 'reasoning':
             thinkingIndicator.classList.add('hidden');
             if (!currentAgentMessage || !currentAgentMessage.classList.contains('reasoning')) {
@@ -58,18 +54,14 @@ function handleAgentEvent(msg) {
             thinkingIndicator.classList.add('hidden');
             if (!currentAgentMessage || currentAgentMessage.classList.contains('reasoning')) {
                 currentAgentMessage = createMessageElement('agent');
+                currentAgentMessage.classList.add('streaming');
             }
             currentAgentMessage.innerText += msg.text;
             break;
 
         case 'handoff':
-            createMessageElement('system', `🔀 Handoff: ${msg.from} → ${msg.to}`);
-            currentAgentMessage = null;
-            thinkingIndicator.classList.remove('hidden');
-            break;
-
-        case 'stop':
             thinkingIndicator.classList.add('hidden');
+            createMessageElement('system', `🔀 Handoff: ${msg.from} → ${msg.to}`);
             currentAgentMessage = null;
             break;
 

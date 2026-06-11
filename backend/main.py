@@ -30,54 +30,48 @@ app = FastAPI(lifespan=lifespan)
 
 
 def _process_event(event):
-    msg = None
+    msgs = []
     event_type = event.get("type") if isinstance(event, dict) else None
 
     # 1. Agent taking control
     if event_type == "multiagent_node_start":
-        msg = {"type": "node_start", "node_id": event.get("node_id", "")}
+        msgs.append({"type": "node_start", "node_id": event.get("node_id", "")})
 
     # 2. Streaming content from an agent
     elif event_type == "multiagent_node_stream":
         inner = event.get("event", {})
         if isinstance(inner, dict):
-            # Text streaming
             if "data" in inner and isinstance(inner["data"], str):
-                msg = {"type": "text", "text": inner["data"]}
-            # Reasoning/thinking
+                msgs.append({"type": "text", "text": inner["data"]})
             elif "reasoningText" in inner and isinstance(inner["reasoningText"], str):
-                msg = {"type": "reasoning", "text": inner["reasoningText"]}
-            # Lifecycle events
-            elif inner.get("init_event_loop") or inner.get("start_event_loop") or inner.get("start"):
-                msg = {"type": "thinking"}
-            # Stop signal
-            elif inner.get("stop"):
-                msg = {"type": "stop"}
+                msgs.append({"type": "reasoning", "text": inner["reasoningText"]})
 
     # 3. Handoff between agents
     elif event_type == "multiagent_handoff":
         from_ids = event.get("from_node_ids", [])
         to_ids = event.get("to_node_ids", [])
-        msg = {
+        msgs.append({
             "type": "handoff",
             "from": ", ".join(from_ids) if isinstance(from_ids, list) else str(from_ids),
             "to": ", ".join(to_ids) if isinstance(to_ids, list) else str(to_ids),
-        }
+        })
 
     # 4. Final result
     elif event_type == "multiagent_result":
         result = event.get("result")
         metadata = {
-            "status": result.status,
+            "status": result.status.value,
             "execution_time": result.execution_time,
             "execution_count": result.execution_count,
-            "input_token": result.accumulated_usage.inputTokens,
-            "output_token": result.accumulated_usage.outputTokens
+            "input_token": result.accumulated_usage["inputTokens"],
+            "output_token": result.accumulated_usage["outputTokens"]
         }
-        final_response = result.node_history[-1].message
-        msg = {"type": "done", "metadata": metadata, "text": final_response}
+        last_node = result.node_history[-1]
+        node_result = result.results[last_node.node_id]
+        final_response = str(node_result.result)
+        msgs.append({"type": "done", "metadata": metadata, "text": final_response})
     
-    return msg
+    return msgs
 
 
 @app.websocket("/ws")
@@ -89,9 +83,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             try:
                 async for event in chat_with_agent(query):
-                    msg = _process_event(event)
-
-                    if msg:
+                    for msg in _process_event(event):
                         await websocket.send_json(msg)
 
             except Exception as stream_err:
