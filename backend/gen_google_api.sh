@@ -1,0 +1,1 @@
+uv run -m strands_google.google_auth
