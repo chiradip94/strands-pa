@@ -1,23 +1,36 @@
+import asyncio
+import signal
+import sys
 from asyncio import base_events
 from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from contextlib import asynccontextmanager
 from utils.langfuse import get_langfuse_client
-from services.chat import chat_with_agent
+from services.chat import Chat
 from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 from mcp_servers.local_servers import python_server
-import asyncio
+from utils.tools_cache import set_tools
+
+
+def safe_exit(signum, frame):
+    print("\nSaving your data safely... Please wait!")
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, safe_exit)
 
 # Initialize Langfuse
 _ = get_langfuse_client()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await asyncio.gather(
+    search_tools, python_tools, time_tools = await asyncio.gather(
         rival_search_mcp_client.load_tools(),
         python_server.load_tools(),
         remote_time_client.load_tools()
     )
+    set_tools(search_tools, python_tools, time_tools)
     yield
     # Cleanup
     rival_search_mcp_client.stop(None, None, None)
@@ -76,13 +89,16 @@ def _process_event(event):
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+
+    chat = await Chat.create()
+
     await websocket.accept()
     try:
         while True:
             query = await websocket.receive_text()
 
             try:
-                async for event in chat_with_agent(query):
+                async for event in chat.chat_with_agent(query):
                     for msg in _process_event(event):
                         await websocket.send_json(msg)
 

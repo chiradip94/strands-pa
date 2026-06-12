@@ -8,6 +8,7 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 
 
 ## Code Modification Guidelines
+- **Use dependency injection:** Use the dependency injection library, try not to create objects on it own, use container.py to create and then inject them.
 - **Be surgical:** Always make the least possible change required to solve the task. Do not rewrite or modify surrounding code blocks if they already work.
 - **Keep changes short & crisp:** Prefer smaller, targeted edits over bulk rewrites.
 - **Explain changes:** Every time you modify a file, you must explicitly state exactly what was changed and why it was changed. Do not skip this summary.
