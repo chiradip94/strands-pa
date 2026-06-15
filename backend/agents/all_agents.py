@@ -3,7 +3,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_google import use_google
 
 
-def get_agents(search_tools, python_tools, time_tools, llm_model):
+def get_agents(search_tools, python_tools, time_tools, memory_tools, llm_model):
     # 1. Search Agent - Focused on research and information retrieval
     search_agent = Agent(
         model=llm_model,
@@ -73,8 +73,8 @@ When done, present the result clearly. If the code fails, report the error to th
         system_prompt="""
 You are a Google Calendar assistant with access limited to the user's Calendar only (no Gmail, Drive, YouTube, or other services).
 
-You can create, list, and delete events in the user's calendar.
-If you don't have the necessary information to create an event (like date, time, or title), ask the user for it.
+You can create, list, and delete events. When the user mentions a plan with a time — like "meeting at 3PM" or "lunch tomorrow" — treat it as an intent to create a calendar event. Extract the details and create it directly rather than asking for confirmation. If something is truly missing (no time, no date at all), then ask.
+
 When listing events, provide the date and time for each event.
 When deleting events, make sure you have the correct event details before deletion.
 
@@ -112,22 +112,49 @@ When done, present the date/time information clearly. If a tool fails, report th
         tools=time_tools
     )
 
-    # 5. Initial Agent - The entry point for the swarm
+    # 5. Memory Agent - Focused on persistent memory storage and recall
+    memory_agent = Agent(
+        model=llm_model,
+        name="Memory Agent",
+        agent_id="memory_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=10),
+        description="""
+        Hand off to this agent for remembering information, storing user preferences/facts, or searching past memories.
+        """,
+        system_prompt="""
+You remember everything the user shares so nothing is lost. Whenever specific information surfaces — facts, preferences, context, decisions, or anything concrete — store it right away. When asked a question, first search memory for relevant context. If you find outdated or incorrect information, update it.
+
+Store information as complete, descriptive sentences so related concepts can be found later.
+
+Use the tools as needed:
+- add_memory(text, metadata): Persist information
+- search_memory(query_text, top_k=5): Retrieve relevant memories
+
+When you retrieve information, respond naturally — like a person who remembers, not like a report. Do not explain the retrieval process. Just answer conversationally.
+""",
+        tools=memory_tools
+    )
+
+    # 6. Initial Agent - The entry point for the swarm
     initial_agent = Agent(
         model=llm_model,
         name="Initial Agent",
         agent_id="initial_agent",
         conversation_manager=SlidingWindowConversationManager(window_size=20),
         description="""
-        Primary coordinator. Answers simple questions directly and delegates specialized tasks to Search, Python, Google, or Time agents.
+        Primary coordinator. Answers simple questions directly and delegates specialized tasks to Search, Python, Google, Time, or Memory agents.
         """,
         system_prompt="""
-You are the primary coordinator agent. Answer simple questions directly from your own knowledge.
+You are the primary coordinator and the user's first point of contact. Answer simple questions directly from your own knowledge.
+
+Whenever the user shares specific information — facts, preferences, context about what they are doing, or anything concrete that might be useful later — hand off to Memory Agent so it can be persisted. Do not just acknowledge and move on; specific information shared is information to be kept.
+
+Before answering questions, hand off to Memory Agent first to retrieve any relevant context that might inform the response. The memory agent can search for what has been learned over time.
 
 When to hand off:
 - Current events, web research, news, social media → Search Agent
 - Calculations, data processing, code execution → Python Agent
-- Google Calendar events → Google Agent
+- Plans with times, appointments, meetings, events → Google Agent
 - Current date/time, timezone conversions → Time Agent
 
 Rules:
@@ -137,4 +164,4 @@ Rules:
 """
     )
 
-    return [search_agent, python_agent, google_agent, time_agent, initial_agent]
+    return [search_agent, python_agent, google_agent, time_agent, memory_agent, initial_agent]
