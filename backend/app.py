@@ -75,7 +75,8 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
             query = await websocket.receive_text()
 
             try:
-                async for event in chat.chat_with_agent(query):
+                session_id = websocket.query_params.get("session_id", "default")
+                async for event in chat.chat_with_agent(query, session_id):
                     for msg in _process_event(event):
                         await websocket.send_json(msg)
 

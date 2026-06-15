@@ -42,7 +42,7 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 
 | Action | Command |
 |---|---|
-| Dev server | `uv run uvicorn main:app --host 0.0.0.0 --port 8000 --reload` |
+| Dev server | `uv run uvicorn app:app --host 0.0.0.0 --port 8000 --reload` |
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |

@@ -2,6 +2,7 @@ from dependency_injector import containers, providers
 from strands.multiagent import Swarm
 from vector_store.qdrant import QdrantVectorStore
 from config import config
+from session_manager.mongo_session_manager import ConversationHistoryManager
 from utils.llm import get_llm_model
 from agents.all_agents import get_agents
 from utils.get_tools import get_mcp_tools
@@ -26,9 +27,9 @@ def _create_swarm(llm_model):
     )
 
 
-def _make_chat(swarm):
+def _make_chat(swarm, conversation_history):
     from services.chat import Chat
-    return Chat(swarm=swarm)
+    return Chat(swarm=swarm, conversation_history=conversation_history)
 
 
 class Container(containers.DeclarativeContainer):
@@ -51,8 +52,14 @@ class Container(containers.DeclarativeContainer):
         vector_size=config_provider.qdrant_vector_size,
     )
 
+    conversation_history = providers.Singleton(
+        ConversationHistoryManager,
+        uri=config_provider.mongo_uri,
+        db_name=config_provider.mongo_db,
+    )
+
     swarm = providers.Singleton(_create_swarm, llm_model=llm_model)
-    chat = providers.Singleton(_make_chat, swarm=swarm)
+    chat = providers.Singleton(_make_chat, swarm=swarm, conversation_history=conversation_history)
 
 
 container = Container()

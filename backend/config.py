@@ -12,4 +12,6 @@ config = {
     "qdrant_api_key": os.getenv("QDRANT_API_KEY"),
     "qdrant_model": os.getenv("QDRANT_MODEL"),
     "qdrant_vector_size": int(os.getenv("QDRANT_VECTOR_SIZE", "1536")),
+    "mongo_uri": os.getenv("MONGO_URI"),
+    "mongo_db": os.getenv("MONGO_DB"),
 }
