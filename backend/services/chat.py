@@ -36,3 +36,5 @@ class Chat:
             self.conversation_history.add_message(
                 session_id, "assistant", final_text
             )
+
+        await self.conversation_history.update_conversation_with_summary(session_id)

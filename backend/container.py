@@ -54,6 +54,7 @@ class Container(containers.DeclarativeContainer):
 
     conversation_history = providers.Singleton(
         ConversationHistoryManager,
+        model=llm_model,
         uri=config_provider.mongo_uri,
         db_name=config_provider.mongo_db,
     )

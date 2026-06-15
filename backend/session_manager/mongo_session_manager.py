@@ -3,10 +3,13 @@ from datetime import datetime
 from pymongo import MongoClient
 from pymongo.collection import Collection
 
+from utils.llm import respond
+
 
 class ConversationHistoryManager:
 
-    def __init__(self, uri: str, db_name: str, collection_name: str = "conversations"):
+    def __init__(self, model, uri: str, db_name: str, collection_name: str = "conversations"):
+        self._model = model
         self._collection: Collection = MongoClient(uri)[db_name][collection_name]
         self._ensure_indexes()
 
@@ -51,3 +54,31 @@ class ConversationHistoryManager:
     def delete_by_session_id(self, session_id: str) -> int:
         result = self._collection.delete_many({"session_id": session_id})
         return result.deleted_count
+
+    async def summarise_conversation(self, session_id: str) -> str:
+        messages = list(self._collection.find(
+            {"session_id": session_id},
+            sort=[("created_at", 1)],
+        ))
+        lines = []
+        for m in messages:
+            tag = f"{m['role']} ({m['agent_name']})" if m.get("agent_name") else m["role"]
+            lines.append(f"{tag}: {m['content']}")
+        conversation_text = "\n".join(lines)
+
+        summary = await respond(
+            self._model,
+            system_prompt="Summarize the following conversation concisely, preserving all key user information, preferences, and context that may be needed for future responses.",
+            user_message=conversation_text,
+        )
+        return summary
+
+    async def update_conversation_with_summary(self, session_id: str) -> None:
+        if self.count_by_session_id(session_id) <= 20:
+            return
+        summary = await self.summarise_conversation(session_id)
+        self.delete_by_session_id(session_id)
+        self.add_message(
+            session_id, "system", summary, agent_name="summary",
+            metadata={"type": "conversation_summary"},
+        )

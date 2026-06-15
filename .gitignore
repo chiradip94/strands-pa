@@ -38,3 +38,4 @@ Thumbs.db
 node_modules/
 backend/data
 opencode.json
+backend/test.py
