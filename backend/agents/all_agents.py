@@ -1,4 +1,5 @@
 from strands import Agent
+from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_google import use_google
 
 
@@ -8,6 +9,7 @@ def get_agents(search_tools, python_tools, time_tools, llm_model):
         model=llm_model,
         name="Search Agent",
         agent_id="search_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=10),
         description="""
         You are a research specialist. You can search the web, news, social media, and more.
         Hand off to this agent when you need to find information that occurred after your training data.
@@ -38,6 +40,7 @@ When done, present the findings clearly to the user. If a search fails or return
         model=llm_model,
         name="Python Agent",
         agent_id="python_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=10),
         description="""
         You are a computational specialist. You can execute Python code to perform calculations or data processing.
         Hand off to this agent for any task requiring math, data analysis, or script execution.
@@ -63,6 +66,7 @@ When done, present the result clearly. If the code fails, report the error to th
         model=llm_model,
         name="Google Agent",
         agent_id="google_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=10),
         description="""
         Hand off to this agent for Google Calendar operations — creating, listing, or deleting events.
         """,
@@ -86,6 +90,7 @@ When done, confirm what was done. If an operation fails, report the error clearl
         model=llm_model,
         name="Time Agent",
         agent_id="time_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=10),
         description="""
         Hand off to this agent for current date/time, timezone conversions, or date arithmetic.
         """,
@@ -112,6 +117,7 @@ When done, present the date/time information clearly. If a tool fails, report th
         model=llm_model,
         name="Initial Agent",
         agent_id="initial_agent",
+        conversation_manager=SlidingWindowConversationManager(window_size=20),
         description="""
         Primary coordinator. Answers simple questions directly and delegates specialized tasks to Search, Python, Google, or Time agents.
         """,
@@ -130,5 +136,5 @@ Rules:
 - Only hand off when a task requires a specialist's tools
 """
     )
-    
+
     return [search_agent, python_agent, google_agent, time_agent, initial_agent]

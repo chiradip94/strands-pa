@@ -3,10 +3,16 @@ from strands.multiagent import Swarm
 from config import config
 from utils.llm import get_llm_model
 from agents.all_agents import get_agents
-from utils.tools_cache import get_search_tools, get_python_tools, get_time_tools
+from utils.get_tools import get_mcp_tools
+from mcp_servers.local_servers import python_server
+from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 
 
-def _create_swarm(agents):
+def _create_swarm(llm_model):
+    search_tools = get_mcp_tools(rival_search_mcp_client)
+    python_tools = get_mcp_tools(python_server)
+    time_tools = get_mcp_tools(remote_time_client)
+    agents = get_agents(search_tools, python_tools, time_tools, llm_model)
     initial_agent = next(a for a in agents if a.name == "Initial Agent")
     return Swarm(
         agents,
@@ -17,23 +23,25 @@ def _create_swarm(agents):
     )
 
 
+def _make_chat(swarm):
+    from services.chat import Chat
+    return Chat(swarm=swarm)
+
+
 class Container(containers.DeclarativeContainer):
-    container_config = providers.Configuration()
-    container_config.from_dict(config)
+    config_provider = providers.Configuration()
+    config_provider.from_dict(config)
 
     llm_model = providers.Singleton(
         get_llm_model,
-        base_url=container_config.llm_base_url,
-        api_key=container_config.llm_api_key,
-        model=container_config.llm_model,
+        base_url=config_provider.llm_base_url,
+        api_key=config_provider.llm_api_key,
+        model=config_provider.llm_model,
     )
 
-    agents = providers.Singleton(
-        get_agents,
-        providers.Callable(get_search_tools),
-        providers.Callable(get_python_tools),
-        providers.Callable(get_time_tools),
-        llm_model=llm_model,
-    )
+    swarm = providers.Singleton(_create_swarm, llm_model=llm_model)
+    chat = providers.Singleton(_make_chat, swarm=swarm)
 
-    swarm = providers.Singleton(_create_swarm, agents=agents)
+
+container = Container()
+chat = container.chat()

@@ -36,4 +36,5 @@ Thumbs.db
 
 # Node
 node_modules/
-backend/tmp/
+backend/data
+opencode.json

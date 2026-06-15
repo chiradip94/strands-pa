@@ -1,15 +1,9 @@
-import asyncio
 import signal
 import sys
-from asyncio import base_events
-from typing import Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from contextlib import asynccontextmanager
+from dependency_injector.wiring import inject, Provide
 from utils.langfuse import get_langfuse_client
-from services.chat import Chat
-from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
-from mcp_servers.local_servers import python_server
-from utils.tools_cache import set_tools
+from container import Container, container
 
 
 def safe_exit(signum, frame):
@@ -23,23 +17,7 @@ signal.signal(signal.SIGINT, safe_exit)
 _ = get_langfuse_client()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    search_tools, python_tools, time_tools = await asyncio.gather(
-        rival_search_mcp_client.load_tools(),
-        python_server.load_tools(),
-        remote_time_client.load_tools()
-    )
-    set_tools(search_tools, python_tools, time_tools)
-    yield
-    # Cleanup
-    rival_search_mcp_client.stop(None, None, None)
-    python_server.stop(None, None, None)
-    remote_time_client.stop(None, None, None)
-
-
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 
 def _process_event(event):
@@ -88,9 +66,8 @@ def _process_event(event):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-
-    chat = await Chat.create()
+@inject
+async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat]):
 
     await websocket.accept()
     try:
@@ -103,7 +80,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         await websocket.send_json(msg)
 
             except Exception as stream_err:
-                # Catch errors during a single query's streaming without killing the connection
                 print(f"Streaming error: {stream_err}")
                 await websocket.send_json({"error": str(stream_err)})
 
@@ -111,6 +87,8 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
+
+container.wire(modules=[__name__])
 
 if __name__ == "__main__":
     import uvicorn
