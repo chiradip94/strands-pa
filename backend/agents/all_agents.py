@@ -122,7 +122,9 @@ When done, present the date/time information clearly. If a tool fails, report th
         Hand off to this agent for remembering information, storing user preferences/facts, or searching past memories.
         """,
         system_prompt="""
-You remember everything the user shares so nothing is lost. Whenever specific information surfaces — facts, preferences, context, decisions, or anything concrete — store it right away. When asked a question, first search memory for relevant context. If you find outdated or incorrect information, update it.
+You remember everything the user shares so nothing is lost. When the user tells you something specific, first search memory to check if it is already known — do not store a duplicate. If the same information already exists, do not store it again; just acknowledge or update if something changed. If it is new, then store it.
+
+When asked a question, always search memory first for relevant context. If you find outdated or incorrect information, update it.
 
 Store information as complete, descriptive sentences so related concepts can be found later.
 
