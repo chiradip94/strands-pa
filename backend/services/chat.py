@@ -19,6 +19,7 @@ class Chat:
     async def chat_with_agent(self, query: str, session_id: str = "default"):
         history = self.conversation_history.get_conversation(session_id)
         context = self._format_history(history)
+        context = f"[SYSTEM] Any dates, day names, or times in the conversation history below are from when they were originally recorded and are now stale. Do not use them to determine the current date/time.\n{context}" if context else context
         enriched_query = f"{context}\n\n{query}" if context else query
 
         self.conversation_history.add_message(session_id, "user", query)

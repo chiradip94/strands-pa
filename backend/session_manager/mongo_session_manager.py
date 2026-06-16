@@ -68,13 +68,13 @@ class ConversationHistoryManager:
 
         summary = await respond(
             self._model,
-            system_prompt="Summarize the following conversation concisely, preserving all key user information, preferences, and context that may be needed for future responses.",
+            system_prompt="Summarize the following conversation concisely. Preserve user info, preferences, and ongoing context. Exclude ALL temporal data — no relative terms (today/tomorrow/yesterday/now/this week), no absolute dates (Oct 13, 2025, etc.), no day names (Monday, Tuesday), and no times. These go stale instantly. Calendar event details belong in the calendar, not in summaries.",
             user_message=conversation_text,
         )
         return summary
 
     async def update_conversation_with_summary(self, session_id: str) -> None:
-        if self.count_by_session_id(session_id) <= 20:
+        if self.count_by_session_id(session_id) <= 10:
             return
         summary = await self.summarise_conversation(session_id)
         self.delete_by_session_id(session_id)
