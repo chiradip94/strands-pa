@@ -2,6 +2,7 @@ import signal
 import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from dependency_injector.wiring import inject, Provide
+from langfuse import propagate_attributes
 from utils.langfuse import get_langfuse_client
 from container import Container, container
 
@@ -14,7 +15,7 @@ def safe_exit(signum, frame):
 signal.signal(signal.SIGINT, safe_exit)
 
 # Initialize Langfuse
-_ = get_langfuse_client()
+langfuse = get_langfuse_client()
 
 
 app = FastAPI()
@@ -73,13 +74,13 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
     try:
         while True:
             query = await websocket.receive_text()
-
+            session_id = websocket.query_params.get("session_id", "default")
             try:
-                session_id = websocket.query_params.get("session_id", "default")
-                async for event in chat.chat_with_agent(query, session_id):
-                    for msg in _process_event(event):
-                        await websocket.send_json(msg)
-
+                with langfuse.start_as_current_observation(as_type="span", name="chat"):
+                    with propagate_attributes(session_id=session_id):
+                        async for event in chat.chat_with_agent(query, session_id):
+                            for msg in _process_event(event):
+                                await websocket.send_json(msg)
             except Exception as stream_err:
                 print(f"Streaming error: {stream_err}")
                 await websocket.send_json({"error": str(stream_err)})
