@@ -18,6 +18,20 @@ def make_memory_tools(vector_store: VectorStore):
         return {"status": "success", "message": "Memory stored successfully"}
 
     @tool
+    def update_memory(text: str, metadata: dict) -> dict:
+        """Update an existing memory. If a memory with the same text already exists, its metadata is replaced. Otherwise a new memory is created.
+
+        Args:
+            text: The text content to update, this is used for vector search and should be concise but descriptive.
+            metadata: Dictionary of metadata to associate with this memory
+
+        Returns:
+            A dict with status and message confirming the memory was updated or stored
+        """
+        vector_store.update(text, metadata)
+        return {"status": "success", "message": "Memory updated successfully"}
+
+    @tool
     def search_memory(query_text: str, top_k: int = 5) -> list[dict]:
         """Search stored memories by semantic similarity to the query text.
 
@@ -30,4 +44,4 @@ def make_memory_tools(vector_store: VectorStore):
         """
         return vector_store.search(query_text, top_k)
 
-    return [add_memory, search_memory]
+    return [add_memory, update_memory, search_memory]

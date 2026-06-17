@@ -5,3 +5,6 @@ class VectorStore:
 
     def search(self, query_text: str, top_k: int = 5) -> list[dict]:
         raise NotImplementedError
+    
+    def update(self, text: str, metadata: dict):
+        raise NotImplementedError

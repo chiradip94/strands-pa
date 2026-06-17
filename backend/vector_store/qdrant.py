@@ -1,6 +1,6 @@
 import uuid
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, VectorParams, Distance, Document
+from qdrant_client.models import PointStruct, VectorParams, Distance, Document, Filter, FieldCondition, MatchValue
 
 
 class QdrantVectorStore:
@@ -38,6 +38,35 @@ class QdrantVectorStore:
             collection_name=self.collection_name,
             points=[point],
         )
+
+    def update(self, text: str, metadata: dict):
+        scroll_result = self.client.scroll(
+            collection_name=self.collection_name,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(
+                        key="original_text",
+                        match=MatchValue(value=text),
+                    )
+                ]
+            ),
+            limit=1,
+            with_payload=True,
+        )
+        points = scroll_result[0]
+        if points:
+            metadata["original_text"] = text
+            point = PointStruct(
+                id=points[0].id,
+                vector=Document(text=text, model=self.model),
+                payload=metadata,
+            )
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=[point],
+            )
+        else:
+            self.add_vector(text, metadata)
 
     def search(self, query_text: str, top_k: int = 5) -> list[dict]:
         results = self.client.query_points(
