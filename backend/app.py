@@ -1,6 +1,7 @@
 import signal
 import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from dependency_injector.wiring import inject, Provide
 from langfuse import propagate_attributes
 from utils.langfuse import get_langfuse_client
@@ -19,6 +20,13 @@ langfuse = get_langfuse_client()
 
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def _process_event(event):
@@ -62,7 +70,11 @@ def _process_event(event):
         node_result = result.results[last_node.node_id]
         final_response = str(node_result.result)
         msgs.append({"type": "done", "metadata": metadata, "text": final_response})
-    
+
+    # 5. Conversation summarization
+    elif event_type == "summarized":
+        msgs.append({"type": "summarized", "text": event.get("text", "")})
+
     return msgs
 
 
@@ -89,6 +101,21 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
         print("Client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
+
+
+@app.get("/history")
+@inject
+async def get_history(session_id: str = "default", conversation_history=Provide[Container.conversation_history]):
+    messages = conversation_history.get_conversation(session_id)
+    return [
+        {
+            "role": msg.get("role"),
+            "content": msg.get("content"),
+            "agent_name": msg.get("agent_name"),
+            "metadata": msg.get("metadata"),
+        }
+        for msg in messages
+    ]
 
 container.wire(modules=[__name__])
 

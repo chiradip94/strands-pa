@@ -14,7 +14,7 @@ function connect() {
 
     socket.onopen = () => {
         connectionStatus.className = 'status-dot online';
-        statusText.innerText = 'Connected';
+        statusText.textContent = 'Connected';
     };
 
     socket.onmessage = (event) => {
@@ -24,7 +24,7 @@ function connect() {
 
     socket.onclose = () => {
         connectionStatus.className = 'status-dot offline';
-        statusText.innerText = 'Disconnected. Retrying...';
+        statusText.textContent = 'Disconnected. Retrying...';
         setTimeout(connect, 3000);
     };
 
@@ -47,7 +47,7 @@ function handleAgentEvent(msg) {
                 currentAgentMessage = createMessageElement('agent');
                 currentAgentMessage.classList.add('reasoning');
             }
-            currentAgentMessage.innerText += msg.text;
+            currentAgentMessage.insertAdjacentText('beforeend', msg.text);
             break;
 
         case 'text':
@@ -56,7 +56,7 @@ function handleAgentEvent(msg) {
                 currentAgentMessage = createMessageElement('agent');
                 currentAgentMessage.classList.add('streaming');
             }
-            currentAgentMessage.innerText += msg.text;
+            currentAgentMessage.insertAdjacentText('beforeend', msg.text);
             break;
 
         case 'handoff':
@@ -83,6 +83,11 @@ function handleAgentEvent(msg) {
             }
             break;
 
+        case 'summarized':
+            thinkingIndicator.classList.add('hidden');
+            createMessageElement('system', '📝 Conversation memory compressed');
+            break;
+
         default:
             if (msg.error) {
                 thinkingIndicator.classList.add('hidden');
@@ -98,7 +103,7 @@ function handleAgentEvent(msg) {
 function createMessageElement(role, text = '') {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
-    messageDiv.innerText = text;
+    messageDiv.textContent = text;
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
     return messageDiv;
@@ -106,6 +111,30 @@ function createMessageElement(role, text = '') {
 
 function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+async function loadHistory() {
+    try {
+        const resp = await fetch('http://localhost:8000/history?session_id=default');
+        if (!resp.ok) return;
+        const messages = await resp.json();
+        for (const msg of messages) {
+            const role = msg.role;
+            const content = msg.content || '';
+            const agentName = msg.agent_name;
+            if (role === 'user') {
+                createMessageElement('user', content);
+            } else if (role === 'assistant') {
+                createMessageElement('agent', content);
+            } else if (role === 'system' && agentName === 'summary') {
+                createMessageElement('system', `📝 ${content}`);
+            } else if (role === 'system') {
+                createMessageElement('system', content);
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load history:', err);
+    }
 }
 
 chatForm.addEventListener('submit', (e) => {
@@ -126,3 +155,4 @@ chatForm.addEventListener('submit', (e) => {
 });
 
 connect();
+loadHistory();

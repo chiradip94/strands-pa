@@ -115,6 +115,7 @@ header h1 {
     border-radius: 18px;
     font-size: 0.95rem;
     line-height: 1.5;
+    white-space: pre-wrap;
     animation: slideIn 0.3s ease forwards;
 }
 
@@ -131,6 +132,7 @@ header h1 {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--border);
     border-bottom-left-radius: 4px;
+    white-space: pre-wrap;
 }
 
 /* Intermediate / orchestration events — subtle, transparent */
