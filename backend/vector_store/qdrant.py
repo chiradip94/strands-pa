@@ -39,7 +39,19 @@ class QdrantVectorStore:
             points=[point],
         )
 
-    def update(self, text: str, metadata: dict):
+    def update(self, text: str, metadata: dict, point_id: str | None = None):
+        if point_id is not None:
+            metadata["original_text"] = text
+            point = PointStruct(
+                id=point_id,
+                vector=Document(text=text, model=self.model),
+                payload=metadata,
+            )
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=[point],
+            )
+            return
         scroll_result = self.client.scroll(
             collection_name=self.collection_name,
             scroll_filter=Filter(

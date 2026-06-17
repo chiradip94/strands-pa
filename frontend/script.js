@@ -85,7 +85,9 @@ function handleAgentEvent(msg) {
 
         case 'summarized':
             thinkingIndicator.classList.add('hidden');
-            createMessageElement('system', '📝 Conversation memory compressed');
+            currentAgentMessage = null;
+            messagesContainer.innerHTML = '';
+            loadHistory();
             break;
 
         default:

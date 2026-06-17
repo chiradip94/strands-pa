@@ -3,7 +3,7 @@ from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands_google import use_google
 
 
-def get_agents(search_tools, python_tools, time_tools, memory_tools, llm_model):
+def get_agents(search_tools, python_tools, time_tools, memory_tools, memory_storage_tool, llm_model):
     # 1. Search Agent
     search_agent = Agent(
         model=llm_model,
@@ -92,6 +92,7 @@ When done, present clearly. If it fails, report the error.
     )
 
     # 5. Memory Agent
+    retrieval_tools = [t for t in memory_tools if t.tool_name == "search_memory"]
     memory_agent = Agent(
         model=llm_model,
         name="Memory Agent",
@@ -100,23 +101,20 @@ When done, present clearly. If it fails, report the error.
         description="Hand off to this agent for storing or retrieving personal user facts.",
         system_prompt="""You manage the user's persistent memory.
 
-STORE when user shares personal facts: name, age, location, preferences, relationships, goals — anything unique to them that a web search cannot find.
+--- STORAGE ---
+When the user shares personal facts (name, age, location, relationships, preferences, goals), call the `store_memories` tool with their message. It handles extraction, deduplication, and verification automatically.
 
-DO NOT STORE: general knowledge, current events, trivia, public facts, or things the user asks about (queries).
+--- RETRIEVAL ---
+When the user asks about stored information, use search_memory to find relevant facts and answer from the results.
 
-PROCEDURE for storing:
-1. Always call search_memory first before any add or update.
-2. If an existing memory contains the exact same information — do nothing.
-3. If a similar memory exists but has discrepancies (e.g. outdated details, different values) — call update_memory to replace it with the corrected information.
-4. If no relevant memory exists — call add_memory.
+--- RULES ---
+- STORE: personal facts about the user or people they know
+- DO NOT STORE: general knowledge, current events, trivia, public facts, queries
+- Never use stored dates/times to determine "today" or "now" — they are stale. Use Time Agent for live time.
+- Do not claim done until your tool returns a result.
 
-For retrieval: search_memory and answer from results. Do NOT store during retrieval.
-
-TOOLS: search_memory(query, top_k=5), add_memory(text, metadata), update_memory(text, metadata)
-
-⚠️ TIME: Memories were recorded when the user shared them — their dates and times are now stale. Never use stored dates to determine "today" or "now". Hand off time questions to Time Agent.
-⚠️ COMPLETION: Only claim storage/retrieval is done after your tool returns a result. Speculating without calling your tools is not done.""",
-        tools=memory_tools
+TOOLS: search_memory(query_text, top_k=5), store_memories(query)""",
+        tools=retrieval_tools + [memory_storage_tool]
     )
 
     # 6. Initial Agent — entry point
@@ -126,14 +124,14 @@ TOOLS: search_memory(query, top_k=5), add_memory(text, metadata), update_memory(
         agent_id="initial_agent",
         conversation_manager=SlidingWindowConversationManager(window_size=20),
         description="Primary coordinator. Answers simple questions directly, delegates specialist tasks.",
-        system_prompt="""You are the coordinator and the user's first contact. Answer simple questions from your own knowledge. For everything else, hand off silently — do not generate any response text before handing off.
+        system_prompt="""You are the coordinator and the user's first contact. For everything that needs a specialist, hand off silently — do not generate any response text before handing off.
 
 HANDOFF DECISIONS:
+- **Any personal facts (name, age, relationships, interests, preferences, location, goals)** → Memory Agent. This includes introductions, statements about themselves, and any message where the user shares information about who they are. Do NOT respond directly — hand off silently.
 - Date/time questions → Time Agent. Never guess dates/times from context or memory — they are stale. Only the Time Agent has live data.
 - Calendar, Task, Docs, Sheets, Slides mentions → Google Agent (the user means Google services)
 - Web research, news, social media → Search Agent
 - Math, code, data processing → Python Agent
-- Personal facts about the user → Memory Agent
 - Everything else → answer directly from your knowledge
 
 RULES:

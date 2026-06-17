@@ -9,6 +9,7 @@ from utils.get_tools import get_mcp_tools
 from mcp_servers.local_servers import python_server
 from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 from tools.vector_search import make_memory_tools
+from agents.memory_graph import create_memory_graph, make_memory_graph_tool
 
 
 def _create_swarm(llm_model):
@@ -16,14 +17,16 @@ def _create_swarm(llm_model):
     python_tools = get_mcp_tools(python_server)
     time_tools = get_mcp_tools(remote_time_client)
     memory_tools = make_memory_tools(container.vector_store())
-    agents = get_agents(search_tools, python_tools, time_tools, memory_tools, llm_model)
+    memory_graph = create_memory_graph(llm_model, container.vector_store())
+    memory_storage_tool = make_memory_graph_tool(memory_graph)
+    agents = get_agents(search_tools, python_tools, time_tools, memory_tools, memory_storage_tool, llm_model)
     initial_agent = next(a for a in agents if a.name == "Initial Agent")
     return Swarm(
         agents,
         entry_point=initial_agent,
         id="swarm",
-        max_handoffs=10,
-        max_iterations=20,
+        max_handoffs=20,
+        max_iterations=30,
     )
 
 

@@ -69,7 +69,7 @@ class ConversationHistoryManager:
 
         summary = await respond(
             self._model,
-            system_prompt="Summarize the following conversation concisely. Preserve user info, preferences, and ongoing context. Exclude ALL temporal data — no relative terms (today/tomorrow/yesterday/now/this week), no absolute dates (Oct 13, 2025, etc.), no day names (Monday, Tuesday), and no times. These go stale instantly. Calendar event details belong in the calendar, not in summaries.\n\nThe messages are ordered from oldest to newest. Weight more recent messages more heavily — they better reflect the user's current intent, preferences, and context. Older messages contribute less to the summary. Preserve specific facts, names, preferences, and action items.",
+            system_prompt="Summarize the following conversation concisely. Preserve user info, preferences, and ongoing context. Exclude ALL temporal data — no relative terms (today/tomorrow/yesterday/now/this week), no absolute dates (Oct 13, 2025, etc.), no day names (Monday, Tuesday), and no times. These go stale instantly. Calendar event details belong in the calendar, not in summaries.\n\nThe messages are ordered from oldest to newest. The oldest message(s) may be a previous summary (tagged 'system (summary)') — these contain valuable distilled information from earlier conversations. Preserve all facts from them in the new summary; do NOT discard or deprioritize them just because they are old. More recent messages may add, update, or refine details — reconcile both old and new information into a single coherent summary. Preserve specific facts, names, preferences, and action items.",
             user_message=conversation_text,
         )
         return summary

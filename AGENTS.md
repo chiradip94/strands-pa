@@ -13,7 +13,8 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 - **Keep changes short & crisp:** Prefer smaller, targeted edits over bulk rewrites.
 - **Explain changes:** Every time you modify a file, you must explicitly state exactly what was changed and why it was changed. Do not skip this summary.
 - **No fluff:** Do not add unrequested code comments, metadata headers, or logging lines.
-
+- **Important** - Always follow the coding pattern, folder structure existing in the code base
+- **README,md** - Keep README.md up to date. it should have a diagram of the agents too on how it looks to understand the branching clearly.
 ## Tool Execution
 - Do not re-read files immediately after editing; trust the tool's success.
 - If unsure whether a change is necessary, stop and ask the user.
