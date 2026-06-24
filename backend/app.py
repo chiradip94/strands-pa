@@ -87,15 +87,23 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
         while True:
             query = await websocket.receive_text()
             session_id = websocket.query_params.get("session_id", "default")
-            try:
-                with langfuse.start_as_current_observation(as_type="span", name="chat"):
-                    with propagate_attributes(session_id=session_id):
+            with langfuse.start_as_current_observation(as_type="span", name="chat") as span:
+                with propagate_attributes(session_id=session_id):
+                    try:
                         async for event in chat.chat_with_agent(query, session_id):
+                            if isinstance(event, dict) and event.get("type") == "multiagent_result":
+                                result = event.get("result")
+                                span.update(usage={
+                                    "input": result.accumulated_usage.get("inputTokens", 0),
+                                    "output": result.accumulated_usage.get("outputTokens", 0),
+                                })
                             for msg in _process_event(event):
                                 await websocket.send_json(msg)
-            except Exception as stream_err:
-                print(f"Streaming error: {stream_err}")
-                await websocket.send_json({"error": str(stream_err)})
+                    except Exception as stream_err:
+                        span.update(level="ERROR", status_message=str(stream_err))
+                        print(f"Streaming error: {stream_err}")
+                        await websocket.send_json({"error": str(stream_err)})
+            langfuse.flush()
 
     except WebSocketDisconnect:
         print("Client disconnected")
