@@ -99,17 +99,22 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
 
 @app.get("/history")
 @inject
-async def get_history(session_id: str = "default", conversation_history=Provide[Container.conversation_history]):
-    messages = conversation_history.get_conversation(session_id)
-    return [
-        {
-            "role": msg.get("role"),
-            "content": msg.get("content"),
-            "agent_name": msg.get("agent_name"),
-            "metadata": msg.get("metadata"),
-        }
-        for msg in messages
-    ]
+async def get_history(session_id: str = "default", session_repo=Provide[Container.session_repo]):
+    from services.chat import AGENT_ID
+    sms = session_repo.list_messages(session_id, AGENT_ID)
+    result = []
+    for sm in sms:
+        msg = sm.to_message()
+        role = msg.get("role")
+        if role == "system":
+            continue
+        text = " ".join(
+            b.get("text", "") for b in msg.get("content", []) if isinstance(b, dict) and "text" in b
+        )
+        if not text:
+            continue
+        result.append({"role": role, "content": text})
+    return result
 
 container.wire(modules=[__name__])
 

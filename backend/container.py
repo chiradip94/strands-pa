@@ -1,8 +1,7 @@
 from dependency_injector import containers, providers
-from strands import Agent
 from vector_store.qdrant import QdrantVectorStore
 from config import config
-from session_manager.mongo_session_manager import ConversationHistoryManager
+from session_manager.mongo_session_repository import MongoSessionRepository
 from utils.llm import get_llm_model
 from agents.all_agents import get_sub_agents
 from utils.get_tools import get_mcp_tools
@@ -34,7 +33,7 @@ RULES:
 - Default timezone: Asia/Kolkata (+5:30). Account for timezone differences in conversions."""
 
 
-def _create_orchestrator(llm_model):
+def _create_sub_agent_bundle(llm_model, vector_store):
     search_tools = get_mcp_tools(rival_search_mcp_client)
     python_tools = get_mcp_tools(python_server)
     time_tools = get_mcp_tools(remote_time_client)
@@ -42,43 +41,25 @@ def _create_orchestrator(llm_model):
         cal_tools = make_cal_tools()
     except ValueError:
         cal_tools = []
-    memory_tools = make_memory_tools(container.vector_store())
-    memory_graph = create_memory_graph(llm_model, container.vector_store())
+    memory_tools = make_memory_tools(vector_store)
+    memory_graph = create_memory_graph(llm_model, vector_store)
     memory_storage_tool = make_memory_graph_tool(memory_graph)
 
     search_agent, python_agent, cal_agent, memory_agent = get_sub_agents(
         search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model
     )
 
-    return Agent(
-        model=llm_model,
-        name="Initial Agent",
-        agent_id="initial_agent",
-        system_prompt=ORCHESTRATOR_PROMPT,
-        tools=[
-            search_agent.as_tool(
-                name="search_agent",
-                description="Web research, news, social media, content analysis, scientific research."
-            ),
-            python_agent.as_tool(
-                name="python_agent",
-                description="Calculations, data processing, code execution, math problems."
-            ),
-            cal_agent.as_tool(
-                name="cal_agent",
-                description="Calendar scheduling, bookings, event types, availability management."
-            ),
-            memory_agent.as_tool(
-                name="memory_agent",
-                description="Storing or retrieving personal user facts."
-            ),
-        ] + time_tools
-    )
+    return (search_agent, python_agent, cal_agent, memory_agent, time_tools)
 
 
-def _make_chat(orchestrator, conversation_history):
+def _make_chat(sub_agent_bundle, session_repo, llm_model):
     from services.chat import Chat
-    return Chat(orchestrator=orchestrator, conversation_history=conversation_history)
+    return Chat(
+        sub_agent_bundle=sub_agent_bundle,
+        session_repo=session_repo,
+        llm_model=llm_model,
+        system_prompt=ORCHESTRATOR_PROMPT,
+    )
 
 
 class Container(containers.DeclarativeContainer):
@@ -101,15 +82,24 @@ class Container(containers.DeclarativeContainer):
         vector_size=config_provider.qdrant_vector_size,
     )
 
-    conversation_history = providers.Singleton(
-        ConversationHistoryManager,
-        model=llm_model,
+    session_repo = providers.Singleton(
+        MongoSessionRepository,
         uri=config_provider.mongo_uri,
         db_name=config_provider.mongo_db,
     )
 
-    orchestrator = providers.Singleton(_create_orchestrator, llm_model=llm_model)
-    chat = providers.Singleton(_make_chat, orchestrator=orchestrator, conversation_history=conversation_history)
+    sub_agent_bundle = providers.Singleton(
+        _create_sub_agent_bundle,
+        llm_model=llm_model,
+        vector_store=vector_store,
+    )
+
+    chat = providers.Singleton(
+        _make_chat,
+        sub_agent_bundle=sub_agent_bundle,
+        session_repo=session_repo,
+        llm_model=llm_model,
+    )
 
 
 container = Container()

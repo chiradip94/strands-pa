@@ -6,13 +6,20 @@ const userInput = document.getElementById('user-input');
 const connectionStatus = document.getElementById('connection-status');
 const statusText = document.getElementById('status-text');
 
+function getSessionId() {
+    return new URLSearchParams(window.location.search).get('session_id') || 'default';
+}
+
+const SESSION_ID = getSessionId();
+
 let socket;
 let currentAgentMessage = null;
 let currentAgentText = '';
 let currentReasoningText = '';
 
 function connect() {
-    socket = new WebSocket('ws://localhost:8000/ws');
+    const wsUrl = 'ws://' + window.location.hostname + ':8000/ws?session_id=' + SESSION_ID;
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
         connectionStatus.className = 'status-dot online';
@@ -215,7 +222,7 @@ function scrollToBottom() {
 
 async function loadHistory() {
     try {
-        const resp = await fetch('http://localhost:8000/history?session_id=default');
+        const resp = await fetch('http://localhost:8000/history?session_id=' + SESSION_ID);
         if (!resp.ok) return;
         const messages = await resp.json();
         for (const msg of messages) {
