@@ -8,6 +8,8 @@ const statusText = document.getElementById('status-text');
 
 let socket;
 let currentAgentMessage = null;
+let currentAgentText = '';
+let currentReasoningText = '';
 
 function connect() {
     socket = new WebSocket('ws://localhost:8000/ws');
@@ -34,6 +36,87 @@ function connect() {
     };
 }
 
+function renderMarkdown(text) {
+    if (!text) return '';
+
+    // 1. protect fenced code blocks (before HTML escape)
+    var blocks = [];
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
+        blocks.push('<pre><code>' + code + '</code></pre>');
+        return '%%B' + (blocks.length - 1) + '%%';
+    });
+
+    // 2. protect blockquotes (strip > prefix, process inline formatting)
+    text = text.replace(/^> (.+)$/gm, function (_, content) {
+        var inner = content
+            .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+            .replace(/~~(.+?)~~/g, '<del>$1</del>')
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        blocks.push('<blockquote>' + inner + '</blockquote>');
+        return '%%B' + (blocks.length - 1) + '%%';
+    });
+
+    // 3. HTML-escape everything that remains
+    var html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    // 4. block-level elements
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+    html = html.replace(/^---\s*$/gm, '<hr>');
+
+    // 5. inline formatting (order matters)
+    html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+    // 6. lists
+    html = html.replace(/^- \[x\] (.+)$/gm, '<li><input type="checkbox" checked disabled> $1</li>');
+    html = html.replace(/^- \[ \] (.+)$/gm, '<li><input type="checkbox" disabled> $1</li>');
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+    html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
+
+    // 7. tables
+    html = html.replace(/^\|(.+)\|$/gm, function (row) {
+        var inner = row.replace(/^\|/, '').replace(/\|$/, '');
+        if (/^[\s\-:|]+$/.test(inner)) return '';
+        var cells = inner.split('|');
+        for (var i = 0; i < cells.length; i++) cells[i] = '<td>' + cells[i].trim() + '</td>';
+        return '<tr>' + cells.join('') + '</tr>';
+    });
+    html = html.replace(/(<tr>.*?<\/tr>(?:\n?<tr>.*?<\/tr>)*)/g, '<table>$1</table>');
+
+    // 8. paragraphs & line breaks (no lookbehinds)
+    html = html.replace(/\n\n+/g, '%%P%%');
+    html = html.replace(/\n/g, '<br>');
+    html = html.replace(/%%P%%/g, '</p><p>');
+    html = '<p>' + html + '</p>';
+
+    // 9. inline code (after paragraph wrapping so it stays inline)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // 10. restore protected blocks — unwrap from <p>
+    for (var i = 0; i < blocks.length; i++) {
+        html = html.replace(new RegExp('<p>%%B' + i + '%%</p>|%%B' + i + '%%', 'g'), blocks[i]);
+    }
+
+    // 11. remove empty paragraphs
+    html = html.replace(/<p>\s*(?:<br>\s*)?<\/p>/g, '');
+
+    return html;
+}
+
 function handleAgentEvent(msg) {
     switch (msg.type) {
         case 'tool_start':
@@ -45,8 +128,10 @@ function handleAgentEvent(msg) {
             if (!currentAgentMessage || !currentAgentMessage.classList.contains('reasoning')) {
                 currentAgentMessage = createMessageElement('agent');
                 currentAgentMessage.classList.add('reasoning');
+                currentReasoningText = '';
             }
-            currentAgentMessage.insertAdjacentText('beforeend', msg.text);
+            currentReasoningText += msg.text;
+            currentAgentMessage.innerHTML = renderMarkdown(currentReasoningText);
             break;
 
         case 'text':
@@ -54,8 +139,10 @@ function handleAgentEvent(msg) {
             if (!currentAgentMessage || currentAgentMessage.classList.contains('reasoning')) {
                 currentAgentMessage = createMessageElement('agent');
                 currentAgentMessage.classList.add('streaming');
+                currentAgentText = '';
             }
-            currentAgentMessage.insertAdjacentText('beforeend', msg.text);
+            currentAgentText += msg.text;
+            currentAgentMessage.innerHTML = renderMarkdown(currentAgentText);
             break;
 
         case 'done':
@@ -64,6 +151,8 @@ function handleAgentEvent(msg) {
                 currentAgentMessage.classList.remove('streaming');
             }
             currentAgentMessage = null;
+            currentAgentText = '';
+            currentReasoningText = '';
             if (msg.metadata) {
                 const meta = msg.metadata;
                 const metaText = [
@@ -77,6 +166,8 @@ function handleAgentEvent(msg) {
         case 'summarized':
             thinkingIndicator.classList.add('hidden');
             currentAgentMessage = null;
+            currentAgentText = '';
+            currentReasoningText = '';
             messagesContainer.innerHTML = '';
             loadHistory();
             break;
@@ -96,7 +187,11 @@ function handleAgentEvent(msg) {
 function createMessageElement(role, text = '') {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
-    messageDiv.textContent = text;
+    if (role === 'agent' || role === 'system') {
+        messageDiv.innerHTML = renderMarkdown(text);
+    } else {
+        messageDiv.textContent = text;
+    }
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
     return messageDiv;
@@ -136,6 +231,8 @@ chatForm.addEventListener('submit', (e) => {
     if (!query) return;
 
     currentAgentMessage = null;
+    currentAgentText = '';
+    currentReasoningText = '';
     createMessageElement('user', query);
 
     if (socket && socket.readyState === WebSocket.OPEN) {
