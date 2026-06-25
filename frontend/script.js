@@ -36,9 +36,8 @@ function connect() {
 
 function handleAgentEvent(msg) {
     switch (msg.type) {
-        case 'node_start':
-            createMessageElement('system', `🔄 ${msg.node_id} taking control`);
-            thinkingIndicator.classList.remove('hidden');
+        case 'tool_start':
+            createMessageElement('system', `🔧 Using ${msg.tool_name}...`);
             break;
 
         case 'reasoning':
@@ -59,25 +58,17 @@ function handleAgentEvent(msg) {
             currentAgentMessage.insertAdjacentText('beforeend', msg.text);
             break;
 
-        case 'handoff':
-            thinkingIndicator.classList.add('hidden');
-            createMessageElement('system', `🔀 Handoff: ${msg.from} → ${msg.to}`);
-            currentAgentMessage = null;
-            break;
-
         case 'done':
             thinkingIndicator.classList.add('hidden');
-            currentAgentMessage = null;
-            if (msg.text) {
-                createMessageElement('agent', msg.text);
+            if (currentAgentMessage) {
+                currentAgentMessage.classList.remove('streaming');
             }
+            currentAgentMessage = null;
             if (msg.metadata) {
                 const meta = msg.metadata;
                 const metaText = [
                     `Status: ${meta.status}`,
                     `Execution time: ${meta.execution_time}s`,
-                    `Execution count: ${meta.execution_count}`,
-                    `Tokens: ${meta.input_token} in / ${meta.output_token} out`,
                 ].join('  •  ');
                 createMessageElement('system', `📊 ${metaText}`);
             }

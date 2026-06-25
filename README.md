@@ -16,7 +16,6 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |
-| Google OAuth | `uv run -m strands_google.google_auth` |
 
 No test framework, no lint/typecheck config.
 
@@ -39,8 +38,8 @@ flowchart TB
         INITIAL["Initial Agent<br/>Entry point, routes queries"]
         SEARCH["Search Agent<br/>Web search via rivalz MCP"]
         PYTHON["Python Agent<br/>Code execution via python_executor MCP"]
-        GOOGLE["Google Agent<br/>Gmail/Calendar via OAuth"]
-        TIME["Time Agent<br/>Current time via remote_time MCP"]
+        CAL["Calendar Agent<br/>Bookings/events via Cal.com MCP"]
+
         MEMORY["Memory Agent<br/>Store/retrieve user facts<br/>search_memory + store_memories tools"]
     end
 
@@ -61,22 +60,23 @@ flowchart TB
         RIVAL["rivalz_search<br/>fetch_url<br/>search_news"]
         PYEXEC["python_executor<br/>(stdio)"]
         REMOTE["remote_time<br/>(HTTP)"]
-        GOOGLE_OAUTH["Google OAuth<br/>gmail_token.json"]
+        CAL_MCP["Cal.com MCP<br/>(stdio / npx @calcom/cal-mcp)"]
     end
 
     WS <--> API
     API --> LIFESPAN
     API --> CHAT --> EVENTS --> WS
     CHAT --> Swarm
-    INITIAL --> SEARCH & PYTHON & GOOGLE & TIME & MEMORY
+    INITIAL --> SEARCH & PYTHON & CAL & MEMORY
+    INITIAL -- "time tools (direct)" --> REMOTE
     MEMORY -- "search_memory" --> QDRANT
     MEMORY -- "store_memories" --> MemoryGraph
     MO --> QDRANT
     VR --> QDRANT
     SEARCH --- RIVAL
     PYTHON --- PYEXEC
-    TIME --- REMOTE
-    GOOGLE --- GOOGLE_OAUTH
+
+    CAL --- CAL_MCP
 ```
 
 ### Agent Roles
@@ -86,8 +86,8 @@ flowchart TB
 | **Initial** | Always | `handoff_to_agent` | Routes user requests to the right specialist agent |
 | **Search** | Initial | `fetch_url`, `search_news`, `search_web`, `handoff_to_agent` | Web search & content retrieval |
 | **Python** | Initial | `python_execute`, `handoff_to_agent` | Run Python code in a sandbox |
-| **Google** | Initial | Gmail/Calendar tools, `handoff_to_agent` | Access Google services |
-| **Time** | Initial | `get_current_time`, `handoff_to_agent` | Tell current date/time |
+| **Calendar** | Initial | Cal.com booking tools, `handoff_to_agent` | Scheduling & events via Cal.com |
+
 | **Memory** | Initial | `search_memory`, `store_memories` | Store & retrieve personal facts |
 
 ### Memory Graph Flow
@@ -113,8 +113,8 @@ Loaded once in FastAPI `lifespan`, cached in module state. `chat_with_agent` re-
 
 ```
 backend/         FastAPI WebSocket server
-  agents/         Agent definitions (6 agents: Initial, Search, Python, Google, Time, Memory)
-  mcp_servers/    MCP tool clients (rivalz_search, python_executor via stdio, remote_time)
+  agents/         Agent definitions (4 sub-agents: Search, Python, Calendar, Memory)
+  mcp_servers/    MCP tool clients (rivalz_search, python_executor via stdio, remote_time, cal_mcp via stdio)
   services/       chat_with_agent() — wires swarm + agents + tools
   utils/          LLM model factory, Langfuse client
   vector_store/   Qdrant wrapper
@@ -148,4 +148,4 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 - Custom `MultiAgentBase` nodes return `MultiAgentResult(results={node_id: NodeResult(...)})`. The outer Graph wraps this inside `NodeResult.result`, so consumers must unwrap with `isinstance(inner, MultiAgentResult)`.
 - Memory Graph nodes receive input as `list[dict]` content blocks (not a raw string). Unmarshal with `" ".join(block.get("text", "") ...)`.
 - The LLM emits `reasoningContent is not supported` errors on every call but still produces usable output.
-- `starts.sh` requires `BYPASS_TOOL_CONSENT=true` and `GOOGLE_OAUTH_CREDENTIALS` path (hardcoded to `/home/chiro/projects/pa/backend/gmail_token.json`).
+- Cal.com MCP server requires `CAL_API_KEY` in `.env` — generate one at [app.cal.com/settings/developer/api-keys](https://app.cal.com/settings/developer/api-keys).

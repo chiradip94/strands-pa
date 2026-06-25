@@ -1,7 +1,10 @@
+import time
+
+
 class Chat:
 
-    def __init__(self, swarm, conversation_history):
-        self.swarm = swarm
+    def __init__(self, orchestrator, conversation_history):
+        self.orchestrator = orchestrator
         self.conversation_history = conversation_history
 
     def _format_history(self, history: list[dict]) -> str:
@@ -25,14 +28,31 @@ class Chat:
 
         self.conversation_history.add_message(session_id, "user", query)
 
-        final_text = None
-        async for event in self.swarm.stream_async(enriched_query):
-            if isinstance(event, dict) and event.get("type") == "multiagent_result":
-                result = event.get("result")
-                last_node = result.node_history[-1]
-                node_result = result.results[last_node.node_id]
-                final_text = str(node_result.result)
+        start_time = time.monotonic()
+        final_text = ""
+
+        async for event in self.orchestrator.stream_async(enriched_query):
+            if isinstance(event, dict):
+                # TextStreamEvent: {"data": "...", "delta": {"text": ...}}
+                if "data" in event and isinstance(event.get("delta"), dict):
+                    final_text += event["data"]
+                # Sub-agent text via ToolStreamEvent
+                elif event.get("type") == "tool_stream":
+                    data = event.get("tool_stream_event", {}).get("data", {})
+                    if "data" in data:
+                        final_text += data["data"]
             yield event
+
+        execution_time = time.monotonic() - start_time
+
+        yield {
+            "type": "done",
+            "text": final_text,
+            "metadata": {
+                "status": "COMPLETED",
+                "execution_time": round(execution_time, 2),
+            }
+        }
 
         if final_text:
             self.conversation_history.add_message(

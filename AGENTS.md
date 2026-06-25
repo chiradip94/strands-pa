@@ -24,8 +24,8 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 
 ```
 backend/         FastAPI WebSocket server
-  agents/         Agent definitions (5 agents: Initial, Search, Python, Google, Time)
-  mcp_servers/    MCP tool clients (rival_search, python_executor via stdio, remote_time)
+  agents/         Agent definitions (4 sub-agents: Search, Python, Calendar, Memory)
+  mcp_servers/    MCP tool clients (rival_search, python_executor via stdio, remote_time, cal_mcp via stdio)
   services/       chat_with_agent() — wires swarm + agents + tools
   utils/          LLM model factory, Langfuse client
   main.py         FastAPI app, WebSocket /ws endpoint, event processing
@@ -47,20 +47,19 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |
-| Google OAuth | `uv run -m strands_google.google_auth` |
 
 No test framework, no lint/typecheck config.
 
 ## Architecture
 
 - **Entrypoint**: `backend/main.py` — FastAPI app with `lifespan` that loads MCP tools, single WebSocket endpoint at `/ws`.
-- **Swarm**: Created per-query in `chat_with_agent()`. 5 agents with `Initial Agent` as entry point. `max_handoffs=10`, `max_iterations=20`.
+- **Swarm**: Created per-query in `chat_with_agent()`. 4 sub-agents (Search, Python, Calendar, Memory) + Initial Agent. Time tools wired directly into Initial Agent. `max_handoffs=10`, `max_iterations=20`.
 - **DI**: `dependency-injector` `Container` provides `LLM` model singleton wired into agent constructors.
 - **LLM**: `OpenAIModel` from strands (supports any OpenAI-compatible provider via `base_url`).
 - **Langfuse**: Initialized at module level in `main.py` on import.
 - **MCP tools**: Loaded once in `lifespan` and cached; `chat_with_agent` re-calls `load_tools()` (returns cached).
 - **Event flow**: Swarm yields `TypedEvent` dicts → `_process_event()` maps to `{"type": ...}` messages → WebSocket sends JSON array to frontend.
-- **starts.sh requirement**: `BYPASS_TOOL_CONSENT=true` and `GOOGLE_OAUTH_CREDENTIALS` path must be set (hardcoded to `/home/chiro/projects/pa/backend/gmail_token.json` — update if repo moved).
+- **Cal.com**: `CAL_API_KEY` must be set in `.env` — generate one at [app.cal.com/settings/developer/api-keys](https://app.cal.com/settings/developer/api-keys).
 
 ## WebSocket Event Protocol
 

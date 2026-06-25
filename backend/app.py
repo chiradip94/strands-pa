@@ -33,45 +33,37 @@ def _process_event(event):
     msgs = []
     event_type = event.get("type") if isinstance(event, dict) else None
 
-    # 1. Agent taking control
-    if event_type == "multiagent_node_start":
-        msgs.append({"type": "node_start", "node_id": event.get("node_id", "")})
+    # Text from the orchestrator (TextStreamEvent: {"data": "...", "delta": {"text": ...}})
+    if "data" in event and isinstance(event.get("delta"), dict):
+        msgs.append({"type": "text", "text": event["data"]})
 
-    # 2. Streaming content from an agent
-    elif event_type == "multiagent_node_stream":
-        inner = event.get("event", {})
-        if isinstance(inner, dict):
-            if "data" in inner and isinstance(inner["data"], str):
-                msgs.append({"type": "text", "text": inner["data"]})
-            elif "reasoningText" in inner and isinstance(inner["reasoningText"], str):
-                msgs.append({"type": "reasoning", "text": inner["reasoningText"]})
+    # Reasoning from the orchestrator (ReasoningTextStreamEvent)
+    elif event.get("reasoning"):
+        msgs.append({"type": "reasoning", "text": event.get("reasoningText", "")})
 
-    # 3. Handoff between agents
-    elif event_type == "multiagent_handoff":
-        from_ids = event.get("from_node_ids", [])
-        to_ids = event.get("to_node_ids", [])
-        msgs.append({
-            "type": "handoff",
-            "from": ", ".join(from_ids) if isinstance(from_ids, list) else str(from_ids),
-            "to": ", ".join(to_ids) if isinstance(to_ids, list) else str(to_ids),
-        })
+    # Raw model chunk — tool call start or text fallback
+    elif "event" in event:
+        chunk = event["event"]
+        if "contentBlockStart" in chunk:
+            start = chunk["contentBlockStart"]
+            if "toolUse" in start:
+                msgs.append({"type": "tool_start", "tool_name": start["toolUse"].get("name", "")})
 
-    # 4. Final result
-    elif event_type == "multiagent_result":
-        result = event.get("result")
-        metadata = {
-            "status": result.status.value,
-            "execution_time": result.execution_time,
-            "execution_count": result.execution_count,
-            "input_token": result.accumulated_usage["inputTokens"],
-            "output_token": result.accumulated_usage["outputTokens"]
-        }
-        last_node = result.node_history[-1]
-        node_result = result.results[last_node.node_id]
-        final_response = str(node_result.result)
-        msgs.append({"type": "done", "metadata": metadata, "text": final_response})
+    # Sub-agent streaming (AgentAsToolStreamEvent / ToolStreamEvent)
+    elif event_type == "tool_stream":
+        tool_stream_event = event.get("tool_stream_event", {})
+        tool_name = tool_stream_event.get("tool_use", {}).get("name", "")
+        data = tool_stream_event.get("data", {})
+        if "data" in data:
+            msgs.append({"type": "text", "tool_name": tool_name, "text": data["data"]})
+        elif data.get("reasoning"):
+            msgs.append({"type": "reasoning", "tool_name": tool_name, "text": data.get("reasoningText", "")})
 
-    # 5. Conversation summarization
+    # Final result from Chat service (already WS-ready)
+    elif event_type == "done":
+        msgs.append(event)
+
+    # Conversation summarization
     elif event_type == "summarized":
         msgs.append({"type": "summarized", "text": event.get("text", "")})
 
@@ -91,12 +83,6 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
                 with propagate_attributes(session_id=session_id):
                     try:
                         async for event in chat.chat_with_agent(query, session_id):
-                            if isinstance(event, dict) and event.get("type") == "multiagent_result":
-                                result = event.get("result")
-                                span.update(usage={
-                                    "input": result.accumulated_usage.get("inputTokens", 0),
-                                    "output": result.accumulated_usage.get("outputTokens", 0),
-                                })
                             for msg in _process_event(event):
                                 await websocket.send_json(msg)
                     except Exception as stream_err:
