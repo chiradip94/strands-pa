@@ -102,6 +102,43 @@ class MongoSessionRepository(SessionRepository):
             result.append(SessionMessage.from_dict(doc))
         return result
 
+    # --- Delete ---
+
+    def delete_session(self, session_id: str) -> None:
+        self._sessions.delete_one({"session_id": session_id})
+        self._agents.delete_many({"session_id": session_id})
+        self._messages.delete_many({"session_id": session_id})
+
+    # --- Session listing ---
+
+    def list_sessions(self) -> list[dict]:
+        pipeline = [
+            {"$group": {
+                "_id": "$session_id",
+                "last_updated": {"$max": "$updated_at"},
+            }},
+            {"$sort": {"last_updated": -1}},
+        ]
+        docs = list(self._messages.aggregate(pipeline))
+        result = []
+        for doc in docs:
+            session_id = doc["_id"]
+            first = self._messages.find_one(
+                {"session_id": session_id, "message.role": {"$in": ["user", "assistant"]}},
+                sort=[("message_id", 1)],
+            )
+            title = ""
+            if first:
+                blocks = first.get("message", {}).get("content", [])
+                texts = [b.get("text", "") for b in blocks if isinstance(b, dict) and "text" in b]
+                title = " ".join(texts)[:80]
+            result.append({
+                "id": session_id,
+                "title": title or "New chat",
+                "last_updated": doc.get("last_updated", ""),
+            })
+        return result
+
     # --- Multi-agent (not used) ---
 
     def create_multi_agent(self, session_id: str, multi_agent: Any, **kwargs: Any) -> None:

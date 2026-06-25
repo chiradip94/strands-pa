@@ -97,6 +97,19 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
         print(f"WebSocket error: {e}")
 
 
+@app.get("/sessions")
+@inject
+async def list_sessions(session_repo=Provide[Container.session_repo]):
+    return session_repo.list_sessions()
+
+
+@app.delete("/sessions/{session_id}")
+@inject
+async def delete_session(session_id: str, session_repo=Provide[Container.session_repo]):
+    session_repo.delete_session(session_id)
+    return {"ok": True}
+
+
 @app.get("/history")
 @inject
 async def get_history(session_id: str = "default", session_repo=Provide[Container.session_repo]):

@@ -5,20 +5,29 @@ const chatForm = document.getElementById('chat-form');
 const userInput = document.getElementById('user-input');
 const connectionStatus = document.getElementById('connection-status');
 const statusText = document.getElementById('status-text');
+const sessionListEl = document.getElementById('session-list');
+const newChatBtn = document.getElementById('new-chat-btn');
 
 function getSessionId() {
     return new URLSearchParams(window.location.search).get('session_id') || 'default';
 }
 
-const SESSION_ID = getSessionId();
-
+let activeSessionId = getSessionId();
 let socket;
+let sessions = [];
 let currentAgentMessage = null;
 let currentAgentText = '';
 let currentReasoningText = '';
+let autoReconnect = true;
 
-function connect() {
-    const wsUrl = 'ws://' + window.location.hostname + ':8000/ws?session_id=' + SESSION_ID;
+function connect(sessionId) {
+    autoReconnect = true;
+    if (socket) {
+        socket.onclose = null;
+        socket.onerror = null;
+        socket.close();
+    }
+    const wsUrl = 'ws://' + window.location.hostname + ':8000/ws?session_id=' + sessionId;
     socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
@@ -34,7 +43,9 @@ function connect() {
     socket.onclose = () => {
         connectionStatus.className = 'status-dot offline';
         statusText.textContent = 'Disconnected. Retrying...';
-        setTimeout(connect, 3000);
+        if (autoReconnect) {
+            setTimeout(() => connect(activeSessionId), 3000);
+        }
     };
 
     socket.onerror = (err) => {
@@ -43,10 +54,108 @@ function connect() {
     };
 }
 
+async function loadSessions() {
+    try {
+        const resp = await fetch('http://localhost:8000/sessions');
+        if (!resp.ok) return;
+        sessions = await resp.json();
+        renderSessionList();
+    } catch (err) {
+        console.error('Failed to load sessions:', err);
+    }
+}
+
+function renderSessionList() {
+    sessionListEl.innerHTML = '';
+    for (const s of sessions) {
+        const el = document.createElement('div');
+        el.className = 'session-item' + (s.id === activeSessionId ? ' active' : '');
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'session-title';
+        titleSpan.textContent = s.title || 'New chat';
+        titleSpan.addEventListener('click', () => switchToSession(s.id));
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'session-delete';
+        delBtn.textContent = '\u00D7';
+        delBtn.title = 'Delete session';
+        delBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteSession(s.id);
+        });
+
+        el.appendChild(titleSpan);
+        el.appendChild(delBtn);
+        sessionListEl.appendChild(el);
+    }
+}
+
+async function deleteSession(sessionId) {
+    if (!confirm('Delete this session?')) return;
+    try {
+        const resp = await fetch('http://localhost:8000/sessions/' + sessionId, {method: 'DELETE'});
+        if (!resp.ok) return;
+        sessions = sessions.filter(s => s.id !== sessionId);
+        if (sessionId === activeSessionId) {
+            const next = sessions[0] || {id: 'default', title: 'New chat'};
+            await switchToSession(next.id);
+        } else {
+            renderSessionList();
+        }
+    } catch (err) {
+        console.error('Failed to delete session:', err);
+    }
+}
+
+async function switchToSession(sessionId) {
+    if (sessionId === activeSessionId) return;
+    activeSessionId = sessionId;
+    messagesContainer.innerHTML = '';
+    currentAgentMessage = null;
+    currentAgentText = '';
+    currentReasoningText = '';
+    thinkingIndicator.classList.add('hidden');
+    connect(sessionId);
+    await loadHistory(sessionId);
+    renderSessionList();
+    const url = new URL(window.location);
+    url.searchParams.set('session_id', sessionId);
+    window.history.replaceState({}, '', url);
+}
+
+function createNewSession() {
+    const newId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    sessions.unshift({id: newId, title: 'New chat', last_updated: now});
+    renderSessionList();
+    switchToSession(newId);
+}
+
+async function loadHistory(sessionId) {
+    try {
+        const resp = await fetch('http://localhost:8000/history?session_id=' + sessionId);
+        if (!resp.ok) return;
+        const messages = await resp.json();
+        for (const msg of messages) {
+            const role = msg.role;
+            const content = msg.content || '';
+            if (role === 'user') {
+                createMessageElement('user', content);
+            } else if (role === 'assistant') {
+                createMessageElement('agent', content);
+            } else if (role === 'system') {
+                createMessageElement('system', content);
+            }
+        }
+    } catch (err) {
+        console.error('Failed to load history:', err);
+    }
+}
+
 function renderMarkdown(text) {
     if (!text) return '';
 
-    // 0. convert literal HTML tags to markdown (agent sometimes outputs HTML)
     text = text
         .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
         .replace(/<em>(.*?)<\/em>/g, '*$1*')
@@ -57,14 +166,12 @@ function renderMarkdown(text) {
         .replace(/<p>/gi, '')
         .replace(/<\/p>/gi, '\n\n');
 
-    // 1. protect fenced code blocks (before HTML escape)
     var blocks = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
         blocks.push('<pre><code>' + code + '</code></pre>');
         return '%%B' + (blocks.length - 1) + '%%';
     });
 
-    // 2. protect blockquotes (strip > prefix, escape first, then inline formatting)
     text = text.replace(/^> (.+)$/gm, function (_, content) {
         var inner = content
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -79,34 +186,29 @@ function renderMarkdown(text) {
         return '%%B' + (blocks.length - 1) + '%%';
     });
 
-    // 3. HTML-escape everything that remains
     var html = text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
 
-    // 4. block-level elements
     html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
     html = html.replace(/^---\s*$/gm, '<hr>');
 
-    // 5. inline formatting (order matters)
     html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
     html = html.replace(/~~(.+?)~~/g, '<del>$1</del>');
     html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
-    // 6. lists
     html = html.replace(/^- \[x\] (.+)$/gm, '<li><input type="checkbox" checked disabled> $1</li>');
     html = html.replace(/^- \[ \] (.+)$/gm, '<li><input type="checkbox" disabled> $1</li>');
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
     html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
     html = html.replace(/((?:<li>.*?<\/li>\n?)+)/g, '<ul>$1</ul>');
 
-    // 7. tables
     html = html.replace(/^\|(.+)\|$/gm, function (row) {
         var inner = row.replace(/^\|/, '').replace(/\|$/, '');
         if (/^[\s\-:|]+$/.test(inner)) return '';
@@ -116,21 +218,17 @@ function renderMarkdown(text) {
     });
     html = html.replace(/(<tr>.*?<\/tr>(?:\n?<tr>.*?<\/tr>)*)/g, '<table>$1</table>');
 
-    // 8. paragraphs & line breaks (no lookbehinds)
     html = html.replace(/\n\n+/g, '%%P%%');
     html = html.replace(/\n/g, '<br>');
     html = html.replace(/%%P%%/g, '</p><p>');
     html = '<p>' + html + '</p>';
 
-    // 9. inline code (after paragraph wrapping so it stays inline)
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
 
-    // 10. restore protected blocks — unwrap from <p>
     for (var i = 0; i < blocks.length; i++) {
         html = html.replace(new RegExp('<p>%%B' + i + '%%</p>|%%B' + i + '%%', 'g'), blocks[i]);
     }
 
-    // 11. remove empty paragraphs
     html = html.replace(/<p>\s*(?:<br>\s*)?<\/p>/g, '');
 
     return html;
@@ -139,7 +237,7 @@ function renderMarkdown(text) {
 function handleAgentEvent(msg) {
     switch (msg.type) {
         case 'tool_start':
-            createMessageElement('system', `🔧 Using ${msg.tool_name}...`);
+            createMessageElement('system', '\uD83D\uDD27 Using ' + msg.tool_name + '...');
             break;
 
         case 'reasoning':
@@ -169,16 +267,16 @@ function handleAgentEvent(msg) {
             if (currentAgentMessage) {
                 currentAgentMessage.classList.remove('streaming');
             }
+            if (currentAgentText) {
+                updateSessionTitle(activeSessionId, currentAgentText);
+            }
             currentAgentMessage = null;
             currentAgentText = '';
             currentReasoningText = '';
             if (msg.metadata) {
                 const meta = msg.metadata;
-                const metaText = [
-                    `Status: ${meta.status}`,
-                    `Execution time: ${meta.execution_time}s`,
-                ].join('  •  ');
-                createMessageElement('system', `📊 ${metaText}`);
+                const metaText = 'Status: ' + meta.status + '  \u2022  Execution time: ' + meta.execution_time + 's';
+                createMessageElement('system', '\uD83D\uDCCA ' + metaText);
             }
             break;
 
@@ -188,13 +286,13 @@ function handleAgentEvent(msg) {
             currentAgentText = '';
             currentReasoningText = '';
             messagesContainer.innerHTML = '';
-            loadHistory();
+            loadHistory(activeSessionId);
             break;
 
         default:
             if (msg.error) {
                 thinkingIndicator.classList.add('hidden');
-                createMessageElement('agent', `Error: ${msg.error}`);
+                createMessageElement('agent', 'Error: ' + msg.error);
                 currentAgentMessage = null;
             }
             break;
@@ -203,13 +301,21 @@ function handleAgentEvent(msg) {
     scrollToBottom();
 }
 
-function createMessageElement(role, text = '') {
+function updateSessionTitle(sessionId, text) {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session && session.title === 'New chat') {
+        session.title = text.trim().slice(0, 80);
+        renderSessionList();
+    }
+}
+
+function createMessageElement(role, text) {
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${role}-message`;
+    messageDiv.className = 'message ' + role + '-message';
     if (role === 'agent' || role === 'system') {
-        messageDiv.innerHTML = renderMarkdown(text);
+        messageDiv.innerHTML = renderMarkdown(text || '');
     } else {
-        messageDiv.textContent = text;
+        messageDiv.textContent = text || '';
     }
     messagesContainer.appendChild(messageDiv);
     scrollToBottom();
@@ -218,30 +324,6 @@ function createMessageElement(role, text = '') {
 
 function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;
-}
-
-async function loadHistory() {
-    try {
-        const resp = await fetch('http://localhost:8000/history?session_id=' + SESSION_ID);
-        if (!resp.ok) return;
-        const messages = await resp.json();
-        for (const msg of messages) {
-            const role = msg.role;
-            const content = msg.content || '';
-            const agentName = msg.agent_name;
-            if (role === 'user') {
-                createMessageElement('user', content);
-            } else if (role === 'assistant') {
-                createMessageElement('agent', content);
-            } else if (role === 'system' && agentName === 'summary') {
-                createMessageElement('system', `📝 ${content}`);
-            } else if (role === 'system') {
-                createMessageElement('system', content);
-            }
-        }
-    } catch (err) {
-        console.error('Failed to load history:', err);
-    }
 }
 
 chatForm.addEventListener('submit', (e) => {
@@ -263,5 +345,12 @@ chatForm.addEventListener('submit', (e) => {
     scrollToBottom();
 });
 
-connect();
-loadHistory();
+newChatBtn.addEventListener('click', createNewSession);
+
+async function init() {
+    connect(activeSessionId);
+    await loadSessions();
+    await loadHistory(activeSessionId);
+}
+
+init();
