@@ -39,6 +39,17 @@ function connect() {
 function renderMarkdown(text) {
     if (!text) return '';
 
+    // 0. convert literal HTML tags to markdown (agent sometimes outputs HTML)
+    text = text
+        .replace(/<strong>(.*?)<\/strong>/g, '**$1**')
+        .replace(/<em>(.*?)<\/em>/g, '*$1*')
+        .replace(/<b>(.*?)<\/b>/g, '**$1**')
+        .replace(/<i>(.*?)<\/i>/g, '*$1*')
+        .replace(/<code>(.*?)<\/code>/g, '`$1`')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<p>/gi, '')
+        .replace(/<\/p>/gi, '\n\n');
+
     // 1. protect fenced code blocks (before HTML escape)
     var blocks = [];
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, function (_, lang, code) {
@@ -46,16 +57,17 @@ function renderMarkdown(text) {
         return '%%B' + (blocks.length - 1) + '%%';
     });
 
-    // 2. protect blockquotes (strip > prefix, process inline formatting)
+    // 2. protect blockquotes (strip > prefix, escape first, then inline formatting)
     text = text.replace(/^> (.+)$/gm, function (_, content) {
         var inner = content
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        inner = inner
             .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
             .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
             .replace(/\*([^*]+)\*/g, '<em>$1</em>')
             .replace(/~~(.+?)~~/g, '<del>$1</del>')
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            .replace(/`([^`]+)`/g, '<code>$1</code>');
         blocks.push('<blockquote>' + inner + '</blockquote>');
         return '%%B' + (blocks.length - 1) + '%%';
     });
