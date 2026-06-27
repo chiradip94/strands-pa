@@ -1,1 +1,1 @@
-from .all_agents import get_agents
+from .all_agents import get_sub_agents

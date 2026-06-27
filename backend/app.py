@@ -6,6 +6,7 @@ from dependency_injector.wiring import inject, Provide
 from langfuse import propagate_attributes
 from utils.langfuse import get_langfuse_client
 from container import Container, container
+from services.confirmation import ws_send, ws_recv
 
 
 def safe_exit(signum, frame):
@@ -33,45 +34,37 @@ def _process_event(event):
     msgs = []
     event_type = event.get("type") if isinstance(event, dict) else None
 
-    # 1. Agent taking control
-    if event_type == "multiagent_node_start":
-        msgs.append({"type": "node_start", "node_id": event.get("node_id", "")})
+    # Text from the orchestrator (TextStreamEvent: {"data": "...", "delta": {"text": ...}})
+    if "data" in event and isinstance(event.get("delta"), dict):
+        msgs.append({"type": "text", "text": event["data"]})
 
-    # 2. Streaming content from an agent
-    elif event_type == "multiagent_node_stream":
-        inner = event.get("event", {})
-        if isinstance(inner, dict):
-            if "data" in inner and isinstance(inner["data"], str):
-                msgs.append({"type": "text", "text": inner["data"]})
-            elif "reasoningText" in inner and isinstance(inner["reasoningText"], str):
-                msgs.append({"type": "reasoning", "text": inner["reasoningText"]})
+    # Reasoning from the orchestrator (ReasoningTextStreamEvent)
+    elif event.get("reasoning"):
+        msgs.append({"type": "reasoning", "text": event.get("reasoningText", "")})
 
-    # 3. Handoff between agents
-    elif event_type == "multiagent_handoff":
-        from_ids = event.get("from_node_ids", [])
-        to_ids = event.get("to_node_ids", [])
-        msgs.append({
-            "type": "handoff",
-            "from": ", ".join(from_ids) if isinstance(from_ids, list) else str(from_ids),
-            "to": ", ".join(to_ids) if isinstance(to_ids, list) else str(to_ids),
-        })
+    # Raw model chunk — tool call start or text fallback
+    elif "event" in event:
+        chunk = event["event"]
+        if "contentBlockStart" in chunk:
+            start = chunk["contentBlockStart"]
+            if "toolUse" in start:
+                msgs.append({"type": "tool_start", "tool_name": start["toolUse"].get("name", "")})
 
-    # 4. Final result
-    elif event_type == "multiagent_result":
-        result = event.get("result")
-        metadata = {
-            "status": result.status.value,
-            "execution_time": result.execution_time,
-            "execution_count": result.execution_count,
-            "input_token": result.accumulated_usage["inputTokens"],
-            "output_token": result.accumulated_usage["outputTokens"]
-        }
-        last_node = result.node_history[-1]
-        node_result = result.results[last_node.node_id]
-        final_response = str(node_result.result)
-        msgs.append({"type": "done", "metadata": metadata, "text": final_response})
+    # Sub-agent streaming (AgentAsToolStreamEvent / ToolStreamEvent)
+    elif event_type == "tool_stream":
+        tool_stream_event = event.get("tool_stream_event", {})
+        tool_name = tool_stream_event.get("tool_use", {}).get("name", "")
+        data = tool_stream_event.get("data", {})
+        if "data" in data:
+            msgs.append({"type": "text", "tool_name": tool_name, "text": data["data"]})
+        elif data.get("reasoning"):
+            msgs.append({"type": "reasoning", "tool_name": tool_name, "text": data.get("reasoningText", "")})
 
-    # 5. Conversation summarization
+    # Final result from Chat service (already WS-ready)
+    elif event_type == "done":
+        msgs.append(event)
+
+    # Conversation summarization
     elif event_type == "summarized":
         msgs.append({"type": "summarized", "text": event.get("text", "")})
 
@@ -87,15 +80,23 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
         while True:
             query = await websocket.receive_text()
             session_id = websocket.query_params.get("session_id", "default")
-            try:
-                with langfuse.start_as_current_observation(as_type="span", name="chat"):
-                    with propagate_attributes(session_id=session_id):
-                        async for event in chat.chat_with_agent(query, session_id):
-                            for msg in _process_event(event):
-                                await websocket.send_json(msg)
-            except Exception as stream_err:
-                print(f"Streaming error: {stream_err}")
-                await websocket.send_json({"error": str(stream_err)})
+            with langfuse.start_as_current_observation(as_type="span", name="chat") as span:
+                with propagate_attributes(session_id=session_id):
+                    try:
+                        token_send = ws_send.set(websocket.send_json)
+                        token_recv = ws_recv.set(websocket.receive_text)
+                        try:
+                            async for event in chat.chat_with_agent(query, session_id):
+                                for msg in _process_event(event):
+                                    await websocket.send_json(msg)
+                        finally:
+                            ws_send.reset(token_send)
+                            ws_recv.reset(token_recv)
+                    except Exception as stream_err:
+                        span.update(level="ERROR", status_message=str(stream_err))
+                        print(f"Streaming error: {stream_err}")
+                        await websocket.send_json({"error": str(stream_err)})
+            langfuse.flush()
 
     except WebSocketDisconnect:
         print("Client disconnected")
@@ -103,19 +104,37 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
         print(f"WebSocket error: {e}")
 
 
+@app.get("/sessions")
+@inject
+async def list_sessions(session_repo=Provide[Container.session_repo]):
+    return session_repo.list_sessions()
+
+
+@app.delete("/sessions/{session_id}")
+@inject
+async def delete_session(session_id: str, session_repo=Provide[Container.session_repo]):
+    session_repo.delete_session(session_id)
+    return {"ok": True}
+
+
 @app.get("/history")
 @inject
-async def get_history(session_id: str = "default", conversation_history=Provide[Container.conversation_history]):
-    messages = conversation_history.get_conversation(session_id)
-    return [
-        {
-            "role": msg.get("role"),
-            "content": msg.get("content"),
-            "agent_name": msg.get("agent_name"),
-            "metadata": msg.get("metadata"),
-        }
-        for msg in messages
-    ]
+async def get_history(session_id: str = "default", session_repo=Provide[Container.session_repo]):
+    from services.chat import AGENT_ID
+    sms = session_repo.list_messages(session_id, AGENT_ID)
+    result = []
+    for sm in sms:
+        msg = sm.to_message()
+        role = msg.get("role")
+        if role == "system":
+            continue
+        text = " ".join(
+            b.get("text", "") for b in msg.get("content", []) if isinstance(b, dict) and "text" in b
+        )
+        if not text:
+            continue
+        result.append({"role": role, "content": text})
+    return result
 
 container.wire(modules=[__name__])
 
