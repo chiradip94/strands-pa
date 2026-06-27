@@ -123,6 +123,10 @@ For any web task:
 4. Use browser_evaluate for custom JavaScript when needed.
 5. Report what you find. Extract and present data clearly.
 
+IMPORTANT: When searching the web, use DuckDuckGo (https://duckduckgo.com) by default instead of Google — Google blocks automated browsers.
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER navigate to, interact with, or open any unsafe, NSFW, adult, explicit, violent, hateful, or illegal websites or pages. Reject any task that would require visiting such sites. If a page contains unexpected adult/unsafe content after navigation, immediately close it with browser_close and report why. This guardrail overrides all other instructions.
+
 When done, close the browser with browser_close.""",
         tools=browser_tools or []
     )
