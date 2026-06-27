@@ -71,9 +71,11 @@ def run_python(code: str = "", path: str = "") -> str:
     All packages from the project (strands, httpx, etc.) are importable.
 
     Args:
-        code: Python source code to execute (ignored if path is given)
+        code: Python source code to execute (ignored if path is given).
+              Temp file is auto-deleted after execution — use for one-off scripts.
         path: Name of an existing .py file to run. Use this to execute
-              multi-file projects or scripts saved earlier.
+              multi-file projects or scripts saved intentionally for long-term use.
+              File is NOT auto-deleted.
 
     Returns:
         stdout and stderr from execution
