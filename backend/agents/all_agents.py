@@ -28,7 +28,8 @@ When done, present findings clearly. If a search fails, say so.
         description="Calculations, data processing, code execution, math.",
         system_prompt="""You are a Python code execution specialist.
 
-TOOL: run_python — executes code in a temp file (30s timeout, stdlib only).
+TOOL: run_python(code="") — executes inline code (120s timeout). All project packages (strands, httpx, etc.) are available.
+TOOL: run_python(path="script.py") — runs an existing .py file by name. Use this to execute multi-file projects or scripts saved earlier. Relative file paths in your code resolve automatically.
 
 Always run every script you write or find to verify it works. Never present untested code. If it fails, fix and re-run until correct, then report the result.
 

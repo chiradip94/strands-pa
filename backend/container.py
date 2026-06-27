@@ -10,6 +10,7 @@ from tools.cal_com import make_cal_tools
 from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 from tools.vector_search import make_memory_tools
 from tools.http_request import http_request
+from tools.file_ops import read_file, write_file, delete_file, list_files
 from agents.memory_graph import create_memory_graph, make_memory_graph_tool
 
 
@@ -26,7 +27,11 @@ DIRECT TOOLS (call these yourself without a sub-agent):
 - currentDateTimeAndTimezone — get the live current date/time
 - convertTimezones — convert between IANA timezones
 - mutateDate — add/subtract days, hours, months, years
-- http_request — make HTTP requests (GET/POST/PUT/PATCH/DELETE) to fetch JSON, HTML, or any web resource. Use for calling REST APIs or fetching web content without a browser.
+- http_request(url, output="") — make HTTP requests. Set `output` to a filename (e.g. "data.json") to save the response body and get a short summary instead of printing the full body. Use this when fetching large data for later processing.
+- write_file — save text content to a file. Use this for storing generated reports, data exports, or any output the user wants to keep.
+- read_file — read text content from a previously saved file. Use this to retrieve saved files, reports, or data.
+- delete_file — delete a file or empty directory. Use this to clean up temporary files after a task is done.
+- list_files — list saved files and directories. Use this to see what files exist.
 
 RULES:
 - Only use a tool agent when needed. For simple answers, respond directly.
@@ -42,7 +47,7 @@ def _create_sub_agent_bundle(llm_model, vector_store):
     search_tools = get_mcp_tools(rival_search_mcp_client)
     python_tools = get_mcp_tools(python_server)
     browser_tools = get_mcp_tools(playwright_client)
-    time_tools = get_mcp_tools(remote_time_client) + [http_request]
+    time_tools = get_mcp_tools(remote_time_client) + [http_request, read_file, write_file, delete_file, list_files]
     try:
         cal_tools = make_cal_tools()
     except ValueError:
