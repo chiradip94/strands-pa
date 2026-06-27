@@ -6,6 +6,7 @@ from dependency_injector.wiring import inject, Provide
 from langfuse import propagate_attributes
 from utils.langfuse import get_langfuse_client
 from container import Container, container
+from services.confirmation import ws_send, ws_recv
 
 
 def safe_exit(signum, frame):
@@ -82,9 +83,15 @@ async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat])
             with langfuse.start_as_current_observation(as_type="span", name="chat") as span:
                 with propagate_attributes(session_id=session_id):
                     try:
-                        async for event in chat.chat_with_agent(query, session_id):
-                            for msg in _process_event(event):
-                                await websocket.send_json(msg)
+                        token_send = ws_send.set(websocket.send_json)
+                        token_recv = ws_recv.set(websocket.receive_text)
+                        try:
+                            async for event in chat.chat_with_agent(query, session_id):
+                                for msg in _process_event(event):
+                                    await websocket.send_json(msg)
+                        finally:
+                            ws_send.reset(token_send)
+                            ws_recv.reset(token_recv)
                     except Exception as stream_err:
                         span.update(level="ERROR", status_message=str(stream_err))
                         print(f"Streaming error: {stream_err}")

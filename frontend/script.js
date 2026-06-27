@@ -19,6 +19,7 @@ let currentAgentMessage = null;
 let currentAgentText = '';
 let currentReasoningText = '';
 let autoReconnect = true;
+let pendingConfirmation = false;
 
 function connect(sessionId) {
     autoReconnect = true;
@@ -262,8 +263,13 @@ function handleAgentEvent(msg) {
             currentAgentMessage.innerHTML = renderMarkdown(currentAgentText);
             break;
 
+        case 'confirmation_required':
+            showConfirmation(msg.prompt);
+            break;
+
         case 'done':
             thinkingIndicator.classList.add('hidden');
+            enableInput();
             if (currentAgentMessage) {
                 currentAgentMessage.classList.remove('streaming');
             }
@@ -292,6 +298,7 @@ function handleAgentEvent(msg) {
         default:
             if (msg.error) {
                 thinkingIndicator.classList.add('hidden');
+                enableInput();
                 createMessageElement('agent', 'Error: ' + msg.error);
                 currentAgentMessage = null;
             }
@@ -344,6 +351,28 @@ chatForm.addEventListener('submit', (e) => {
     userInput.value = '';
     scrollToBottom();
 });
+
+function showConfirmation(prompt) {
+    pendingConfirmation = true;
+    userInput.disabled = true;
+    document.getElementById('send-btn').disabled = true;
+    const banner = document.getElementById('confirmation-banner');
+    banner.querySelector('.confirmation-prompt').textContent = prompt;
+    banner.classList.remove('hidden');
+    scrollToBottom();
+}
+
+function handleConfirm(approved) {
+    pendingConfirmation = false;
+    document.getElementById('confirmation-banner').classList.add('hidden');
+    socket.send(JSON.stringify({type: "confirm", response: approved ? "yes" : "no"}));
+}
+
+function enableInput() {
+    userInput.disabled = false;
+    document.getElementById('send-btn').disabled = false;
+    pendingConfirmation = false;
+}
 
 newChatBtn.addEventListener('click', createNewSession);
 

@@ -35,6 +35,13 @@
                     <div class="dot-pulse"></div>
                     <span>Thinking...</span>
                 </div>
+                <div id="confirmation-banner" class="hidden">
+                    <div class="confirmation-prompt"></div>
+                    <div class="confirmation-buttons">
+                        <button class="confirm-yes" onclick="handleConfirm(true)">&#10003; Approve</button>
+                        <button class="confirm-no" onclick="handleConfirm(false)">&#10007; Deny</button>
+                    </div>
+                </div>
             </main>
 
             <footer>

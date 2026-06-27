@@ -1,4 +1,6 @@
 from strands import Agent
+from strands.vended_interventions.hitl import HumanInTheLoop
+from services.confirmation import ask_human
 
 
 def get_sub_agents(search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model):
@@ -47,7 +49,7 @@ AVAILABLE TOOLS:
 - get_bookings — list bookings (optional: status, attendee_email, date range)
 - get_booking — get one booking (booking_uid)
 - create_booking — book a slot (start, event_type_id, attendee_name, ...)
-- cancel_booking — cancel a booking (booking_uid, reason?)
+- cancel_booking — cancel a booking (booking_uid, cancellation_reason). Use the string `uid` from get_bookings, NOT the numeric `id`. Always include the booking title in cancellation_reason.
 - reschedule_booking — move a booking (booking_uid, new_start, reason?)
 - confirm_booking — confirm a pending booking (booking_uid)
 - mark_booking_absent — mark host/attendees absent (booking_uid)
@@ -66,9 +68,21 @@ When user requests an action:
 3. Always call the appropriate tool and check the result to confirm success.
 4. For "list my bookings" or "show my events", use get_bookings.
 5. For "what events can I book", use get_event_types + get_availability.
+6. When cancelling a booking, always include the booking title in the cancellation_reason so it's visible in the confirmation prompt.
 
 When done, report clearly what was accomplished. If it fails after retrying, report the error.""",
-        tools=cal_tools
+        tools=cal_tools,
+        interventions=[
+            HumanInTheLoop(
+                ask=ask_human,
+                allowed_tools=[
+                    "*",
+                    "!cancel_booking",
+                    "!delete_event_type",
+                    "!delete_schedule",
+                ],
+            )
+        ],
     )
 
     retrieval_tools = [t for t in memory_tools if t.tool_name == "search_memory"]

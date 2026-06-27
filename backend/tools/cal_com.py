@@ -29,6 +29,15 @@ def _client(api_version: str | None = None, timeout: int = _DEFAULT_TIMEOUT):
     return httpx.AsyncClient(base_url=BASE_URL, headers=headers, timeout=timeout)
 
 
+def _check(r: httpx.Response) -> dict:
+    try:
+        r.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        body = e.response.text
+        raise RuntimeError(f"Cal.com API error {e.response.status_code}: {body}") from e
+    return r.json()
+
+
 def make_cal_tools():
     _api_key()  # eager validation; raises ValueError if key is missing
 
@@ -41,8 +50,7 @@ def make_cal_tools():
         """
         async with _client() as c:
             r = await c.get("/me")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_event_types(
@@ -65,8 +73,7 @@ def make_cal_tools():
             params["eventSlug"] = event_slug
         async with _client(api_version="2024-06-14") as c:
             r = await c.get("/event-types", params=params)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_event_type(event_type_id: int) -> dict:
@@ -80,8 +87,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-14") as c:
             r = await c.get(f"/event-types/{event_type_id}")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def create_event_type(
@@ -162,8 +168,7 @@ def make_cal_tools():
             body.update(data)
         async with _client(api_version="2024-06-14") as c:
             r = await c.post("/event-types", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def update_event_type(
@@ -248,8 +253,7 @@ def make_cal_tools():
             body.update(data)
         async with _client(api_version="2024-06-14") as c:
             r = await c.patch(f"/event-types/{event_type_id}", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def delete_event_type(event_type_id: int) -> dict:
@@ -263,8 +267,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-14") as c:
             r = await c.delete(f"/event-types/{event_type_id}")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_bookings(
@@ -301,8 +304,7 @@ def make_cal_tools():
             params["cursor"] = cursor
         async with _client(api_version="2026-05-01") as c:
             r = await c.get("/bookings", params=params)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_booking(booking_uid: str) -> dict:
@@ -316,8 +318,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2026-02-25") as c:
             r = await c.get(f"/bookings/{booking_uid}")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def create_booking(
@@ -365,8 +366,7 @@ def make_cal_tools():
             body["metadata"] = metadata
         async with _client(api_version="2026-02-25") as c:
             r = await c.post("/bookings", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def cancel_booking(
@@ -382,13 +382,10 @@ def make_cal_tools():
         Returns:
             Cancelled booking details.
         """
-        body = {}
-        if cancellation_reason:
-            body["cancellationReason"] = cancellation_reason
+        body = {"cancellationReason": cancellation_reason or "Cancelled by user request"}
         async with _client(api_version="2026-02-25") as c:
             r = await c.post(f"/bookings/{booking_uid}/cancel", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def reschedule_booking(
@@ -411,8 +408,7 @@ def make_cal_tools():
             body["reschedulingReason"] = reschedule_reason
         async with _client(api_version="2026-02-25") as c:
             r = await c.post(f"/bookings/{booking_uid}/reschedule", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def confirm_booking(booking_uid: str) -> dict:
@@ -426,8 +422,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2026-02-25") as c:
             r = await c.post(f"/bookings/{booking_uid}/confirm")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def mark_booking_absent(
@@ -455,8 +450,7 @@ def make_cal_tools():
             ]
         async with _client(api_version="2026-02-25") as c:
             r = await c.post(f"/bookings/{booking_uid}/mark-absent", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_schedules() -> dict:
@@ -467,8 +461,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-11") as c:
             r = await c.get("/schedules")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_schedule(schedule_id: int) -> dict:
@@ -482,8 +475,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-11") as c:
             r = await c.get(f"/schedules/{schedule_id}")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_default_schedule() -> dict:
@@ -494,8 +486,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-11") as c:
             r = await c.get("/schedules/default")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def create_schedule(
@@ -531,8 +522,7 @@ def make_cal_tools():
             body["overrides"] = overrides
         async with _client(api_version="2024-06-11") as c:
             r = await c.post("/schedules", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def update_schedule(
@@ -569,8 +559,7 @@ def make_cal_tools():
             body["overrides"] = overrides
         async with _client(api_version="2024-06-11") as c:
             r = await c.patch(f"/schedules/{schedule_id}", json=body)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def delete_schedule(schedule_id: int) -> dict:
@@ -584,8 +573,7 @@ def make_cal_tools():
         """
         async with _client(api_version="2024-06-11") as c:
             r = await c.delete(f"/schedules/{schedule_id}")
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_availability(
@@ -626,8 +614,7 @@ def make_cal_tools():
             params["duration"] = str(duration)
         async with _client(api_version="2024-09-04") as c:
             r = await c.get("/slots", params=params)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     @tool
     async def get_busy_times(
@@ -672,8 +659,7 @@ def make_cal_tools():
             )
         async with _client() as c:
             r = await c.get("/calendars/busy-times", params=params)
-            r.raise_for_status()
-            return r.json()
+            return _check(r)
 
     return [
         get_me,
