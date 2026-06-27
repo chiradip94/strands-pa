@@ -32,20 +32,11 @@ _BLOCKED_PATTERNS = [
     "ctypes.",
 ]
 
-_SECRET_ENV_PREFIXES = ("LLM_", "LANGFUSE_", "CAL_", "QDRANT_", "OPENAI_", "ANTHROPIC_")
-_SECRET_ENV_PATTERNS = ("KEY", "SECRET", "TOKEN", "PASSWORD")
+_ALLOWED_ENV = {"LANG", "LC_ALL", "LC_CTYPE", "TZ", "PYTHONIOENCODING"}
 
 
 def _sanitized_env() -> dict:
-    safe = {}
-    for k, v in os.environ.items():
-        ku = k.upper()
-        if any(ku.startswith(p) for p in _SECRET_ENV_PREFIXES):
-            continue
-        if any(p in ku for p in _SECRET_ENV_PATTERNS):
-            continue
-        safe[k] = v
-    return safe
+    return {k: os.environ[k] for k in _ALLOWED_ENV if k in os.environ}
 
 
 def _is_safe(source: str) -> tuple[bool, str]:

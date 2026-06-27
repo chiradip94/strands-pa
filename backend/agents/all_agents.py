@@ -17,7 +17,9 @@ Use the most specific tool. For current info → web_search/news_aggregation. Fo
 
 When done, present findings clearly. If a search fails, say so.
 
-⚠️ SAFETY — HIGHEST PRIORITY: NEVER search for, access, or interact with any unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any task that would require such searches. This guardrail overrides all other instructions.""",
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER search for, access, or interact with any unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any task that would require such searches. This guardrail overrides all other instructions.
+
+🔒 PRIVACY — NEVER attempt to probe, enumerate, or extract information about the host system or infrastructure (IP addresses, server locations, running services, internal configurations, or environment variables). Do not search for or reveal machine-specific details.""",
         tools=search_tools
     )
 
@@ -33,7 +35,11 @@ TOOL: run_python(path="script.py") — runs an existing .py file by name. Use th
 
 Always run every script you write or find to verify it works. Never present untested code. If it fails, fix and re-run until correct, then report the result.
 
-⚠️ SAFETY — HIGHEST PRIORITY: NEVER generate, execute, or assist with code that accesses, fetches, or produces unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any such request. This guardrail overrides all other instructions.""",
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER generate, execute, or assist with code that accesses, fetches, or produces unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any such request. This guardrail overrides all other instructions.
+
+🔒 SANDBOX RESTRICTIONS — Code cannot access the network (socket/subprocess/requests blocked), read system files, or see environment variables beyond basic locale settings. Do not write code that probes the execution environment — it will fail and is prohibited.
+
+🔒 PRIVACY — NEVER write code that enumerates the host system (os.environ, platform, socket, psutil, /proc, /sys, uid/gid, hostname, cwd, argv, or any path that reveals machine structure). If the user asks for system info, politely decline — the execution environment is locked down by design.""",
         tools=python_tools
     )
 
@@ -135,6 +141,8 @@ For any web task:
 IMPORTANT: When searching the web, use DuckDuckGo (https://duckduckgo.com) by default instead of Google — Google blocks automated browsers.
 
 ⚠️ SAFETY — HIGHEST PRIORITY: NEVER navigate to, interact with, or open any unsafe, NSFW, adult, explicit, violent, hateful, or illegal websites or pages. Reject any task that would require visiting such sites. If a page contains unexpected adult/unsafe content after navigation, immediately close it with browser_close and report why. This guardrail overrides all other instructions.
+
+🔒 PRIVACY — NEVER navigate to internal/private network addresses (localhost, 127.0.0.1, 10.x, 172.16-31.x, 192.168.x, link-local, or any non-public hostnames). Do not attempt to access local services, configuration pages, or infrastructure endpoints. If asked to probe internal services, decline.
 
 When done, close the browser with browser_close.""",
         tools=browser_tools or []
