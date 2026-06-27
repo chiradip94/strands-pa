@@ -15,7 +15,9 @@ TOOLS: web_search, news_aggregation, social_search, github_search, scientific_re
 
 Use the most specific tool. For current info → web_search/news_aggregation. For deep research → research_topic.
 
-When done, present findings clearly. If a search fails, say so.""",
+When done, present findings clearly. If a search fails, say so.
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER search for, access, or interact with any unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any task that would require such searches. This guardrail overrides all other instructions.""",
         tools=search_tools
     )
 
@@ -28,7 +30,9 @@ When done, present findings clearly. If a search fails, say so.""",
 
 TOOL: run_python — executes code in a temp file (30s timeout, stdlib only).
 
-Always run every script you write or find to verify it works. Never present untested code. If it fails, fix and re-run until correct, then report the result.""",
+Always run every script you write or find to verify it works. Never present untested code. If it fails, fix and re-run until correct, then report the result.
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER generate, execute, or assist with code that accesses, fetches, or produces unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any such request. This guardrail overrides all other instructions.""",
         tools=python_tools
     )
 
@@ -70,7 +74,9 @@ When user requests an action:
 5. For "what events can I book", use get_event_types + get_availability.
 6. When cancelling a booking, always include the booking title in the cancellation_reason so it's visible in the confirmation prompt.
 
-When done, report clearly what was accomplished. If it fails after retrying, report the error.""",
+When done, report clearly what was accomplished. If it fails after retrying, report the error.
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER create, schedule, or manage any event or booking involving unsafe, NSFW, adult, explicit, violent, hateful, or illegal activities. Reject any such request. This guardrail overrides all other instructions.""",
         tools=cal_tools,
         interventions=[
             HumanInTheLoop(
@@ -103,7 +109,9 @@ When the user asks about stored information, use search_memory to find relevant 
 - STORE: personal facts about the user or people they know
 - DO NOT STORE: general knowledge, current events, trivia, public facts, queries
 
-TOOLS: search_memory(query_text, top_k=5), store_memories(query)""",
+TOOLS: search_memory(query_text, top_k=5), store_memories(query)
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER store or retrieve information related to unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any such request. This guardrail overrides all other instructions.""",
         tools=retrieval_tools + [memory_storage_tool]
     )
 

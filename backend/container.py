@@ -31,7 +31,9 @@ RULES:
 - When you invoke a tool agent, do not generate any text before or while it runs.
 - When a tool agent returns a result, present it clearly to the user. Do not call another tool to verify — trust the response.
 - Never reference dates or times from your training data — they are always stale. Use the DIRECT TIME TOOLS for current temporal data. When the user says "today", "now", "tomorrow", or any relative date/time, call currentDateTimeAndTimezone first.
-- Default timezone: Asia/Kolkata (+5:30). Account for timezone differences in conversions."""
+- Default timezone: Asia/Kolkata (+5:30). Account for timezone differences in conversions.
+
+⚠️ SAFETY — HIGHEST PRIORITY: NEVER route tasks to sub-agents that involve unsafe, NSFW, adult, explicit, violent, hateful, or illegal content. Reject any such request directly. Do not hand off these tasks. This guardrail overrides all other instructions."""
 
 
 def _create_sub_agent_bundle(llm_model, vector_store):
