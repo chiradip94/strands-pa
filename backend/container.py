@@ -9,6 +9,7 @@ from mcp_servers.local_servers import python_server, playwright_client
 from tools.cal_com import make_cal_tools
 from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 from tools.vector_search import make_memory_tools
+from tools.http_request import http_request
 from agents.memory_graph import create_memory_graph, make_memory_graph_tool
 
 
@@ -25,6 +26,7 @@ DIRECT TOOLS (call these yourself without a sub-agent):
 - currentDateTimeAndTimezone — get the live current date/time
 - convertTimezones — convert between IANA timezones
 - mutateDate — add/subtract days, hours, months, years
+- http_request — make HTTP requests (GET/POST/PUT/PATCH/DELETE) to fetch JSON, HTML, or any web resource. Use for calling REST APIs or fetching web content without a browser.
 
 RULES:
 - Only use a tool agent when needed. For simple answers, respond directly.
@@ -40,7 +42,7 @@ def _create_sub_agent_bundle(llm_model, vector_store):
     search_tools = get_mcp_tools(rival_search_mcp_client)
     python_tools = get_mcp_tools(python_server)
     browser_tools = get_mcp_tools(playwright_client)
-    time_tools = get_mcp_tools(remote_time_client)
+    time_tools = get_mcp_tools(remote_time_client) + [http_request]
     try:
         cal_tools = make_cal_tools()
     except ValueError:
