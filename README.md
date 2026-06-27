@@ -4,9 +4,13 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 
 ## Setup
 
-- Python 3.11 (`.python-version`)
-- `uv` package manager (brew-installed, not in venv). Run commands from `backend/`.
-- Create `backend/.env` with: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LANGFUSE_SECRET_KEY` (plus `LANGFUSE_PUBLIC_KEY` if needed).
+```bash
+./setup.sh
+```
+
+This installs everything: Python deps, Playwright Firefox, and creates `backend/.env` from `.env.example`.
+
+Then edit `backend/.env` with your API keys.
 
 ## Commands (run from `backend/`)
 
@@ -16,6 +20,7 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |
+| Install Playwright Firefox | `uv run playwright install firefox` |
 
 No test framework, no lint/typecheck config.
 
@@ -39,6 +44,7 @@ flowchart TB
         SEARCH["Search Agent<br/>Web search via rivalz MCP"]
         PYTHON["Python Agent<br/>Code execution via python_executor MCP"]
         CAL["Calendar Agent<br/>Bookings/events via Cal.com MCP"]
+        BROWSER["Browser Agent<br/>Web browsing via Playwright MCP<br/>(Firefox)"]
 
         MEMORY["Memory Agent<br/>Store/retrieve user facts<br/>search_memory + store_memories tools"]
     end
@@ -61,13 +67,14 @@ flowchart TB
         PYEXEC["python_executor<br/>(stdio)"]
         REMOTE["remote_time<br/>(HTTP)"]
         CAL_MCP["Cal.com MCP<br/>(stdio / npx @calcom/cal-mcp)"]
+        PLAYWRIGHT["@playwright/mcp<br/>(stdio or remote HTTP)"]
     end
 
     WS <--> API
     API --> LIFESPAN
     API --> CHAT --> EVENTS --> WS
     CHAT --> Swarm
-    INITIAL --> SEARCH & PYTHON & CAL & MEMORY
+    INITIAL --> SEARCH & PYTHON & CAL & BROWSER & MEMORY
     INITIAL -- "time tools (direct)" --> REMOTE
     MEMORY -- "search_memory" --> QDRANT
     MEMORY -- "store_memories" --> MemoryGraph
@@ -77,16 +84,18 @@ flowchart TB
     PYTHON --- PYEXEC
 
     CAL --- CAL_MCP
+    BROWSER --- PLAYWRIGHT
 ```
 
 ### Agent Roles
 
 | Agent | Entry | Tools | Purpose |
-|---|---|---|---|
+|---|---|---|---|---|
 | **Initial** | Always | `handoff_to_agent` | Routes user requests to the right specialist agent |
 | **Search** | Initial | `fetch_url`, `search_news`, `search_web`, `handoff_to_agent` | Web search & content retrieval |
 | **Python** | Initial | `python_execute`, `handoff_to_agent` | Run Python code in a sandbox |
 | **Calendar** | Initial | Cal.com booking tools, `handoff_to_agent` | Scheduling & events via Cal.com |
+| **Browser** | Initial | browser_navigate, browser_click, browser_snapshot, ... | Web browsing & page interaction via Playwright (Firefox) |
 
 | **Memory** | Initial | `search_memory`, `store_memories` | Store & retrieve personal facts |
 
@@ -98,6 +107,18 @@ flowchart TB
 4. **Feedback loop** — If verifier returns `MISSING`, control loops back to `memory_operator` (up to 12 total node executions).
 
 The Memory Graph is wrapped as a `store_memories` `@tool` called by the in-swarm Memory Agent.
+
+### Browser Agent (Playwright)
+
+Uses a Python FastMCP server wrapping Playwright (Firefox). Two modes:
+
+| Mode | Env | When |
+|---|---|---|
+| **Local stdio** (default) | _(none)_ | Runs browser_server.py via stdio — works in WSL with WSLg |
+| **Headless** | `BROWSER_HEADLESS=true` | No GUI needed (headless Firefox) |
+| **Remote (HTTP)** | `PLAYWRIGHT_MCP_URL=http://<ip>:8931/mcp` | Browser runs on another machine |
+
+To use remote mode, start a Playwright MCP server (Node.js or Python) on the other machine and set the URL in `.env`.
 
 ### DI & LLM
 
@@ -113,8 +134,9 @@ Loaded once in FastAPI `lifespan`, cached in module state. `chat_with_agent` re-
 
 ```
 backend/         FastAPI WebSocket server
-  agents/         Agent definitions (4 sub-agents: Search, Python, Calendar, Memory)
-  mcp_servers/    MCP tool clients (rivalz_search, python_executor via stdio, remote_time, cal_mcp via stdio)
+  agents/         Agent definitions (5 sub-agents: Search, Python, Calendar, Memory, Browser)
+  mcp_servers/    MCP tool clients (rival_search, python_executor, remote_time, playwright)
+  tools/          MCP server scripts + tool implementations (browser_server, cal_com, vector_search, scratchpad)
   services/       chat_with_agent() — wires swarm + agents + tools
   utils/          LLM model factory, Langfuse client
   vector_store/   Qdrant wrapper
@@ -149,3 +171,4 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 - Memory Graph nodes receive input as `list[dict]` content blocks (not a raw string). Unmarshal with `" ".join(block.get("text", "") ...)`.
 - The LLM emits `reasoningContent is not supported` errors on every call but still produces usable output.
 - Cal.com MCP server requires `CAL_API_KEY` in `.env` — generate one at [app.cal.com/settings/developer/api-keys](https://app.cal.com/settings/developer/api-keys).
+- Browser Agent requires Firefox: `uv run playwright install firefox`. For headless mode, set `BROWSER_HEADLESS=true` in `.env`.

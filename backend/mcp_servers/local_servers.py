@@ -18,3 +18,22 @@ python_server = MCPClient(
         )
     )
 )
+
+BROWSER_SERVER_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "..", "tools", "browser_server.py"))
+
+_pw_url = os.getenv("PLAYWRIGHT_MCP_URL")
+
+if _pw_url:
+    from mcp.client.streamable_http import streamable_http_client
+    playwright_client = MCPClient(
+        lambda: streamable_http_client(url=_pw_url)
+    )
+else:
+    _pw_env = {**os.environ}
+    playwright_client = MCPClient(
+        lambda env=_pw_env: stdio_client(
+            StdioServerParameters(command=sys.executable, args=[BROWSER_SERVER_PATH], env=env)
+        )
+    )
+    del _pw_env
+del _pw_url

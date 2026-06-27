@@ -3,7 +3,7 @@ from strands.vended_interventions.hitl import HumanInTheLoop
 from services.confirmation import ask_human
 
 
-def get_sub_agents(search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model):
+def get_sub_agents(search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model, browser_tools=None):
     search_agent = Agent(
         model=llm_model,
         name="Search Agent",
@@ -107,4 +107,24 @@ TOOLS: search_memory(query_text, top_k=5), store_memories(query)""",
         tools=retrieval_tools + [memory_storage_tool]
     )
 
-    return [search_agent, python_agent, cal_agent, memory_agent]
+    browser_agent = Agent(
+        model=llm_model,
+        name="Browser Agent",
+        agent_id="browser_agent",
+        description="Web browsing, page interaction, form filling, scraping via Playwright (Firefox).",
+        system_prompt="""You are a browser automation specialist using Playwright (Firefox).
+
+TOOLS: browser_navigate, browser_click, browser_fill_form, browser_snapshot, browser_evaluate, browser_hover, browser_press_key, browser_close, browser_resize, browser_drag, browser_drop, browser_file_upload, browser_console_messages, browser_network_requests, browser_handle_dialog, browser_navigate_back
+
+For any web task:
+1. Start with browser_navigate to go to the URL.
+2. Use browser_snapshot to see the page structure.
+3. Interact with elements using browser_click, browser_fill_form, etc.
+4. Use browser_evaluate for custom JavaScript when needed.
+5. Report what you find. Extract and present data clearly.
+
+When done, close the browser with browser_close.""",
+        tools=browser_tools or []
+    )
+
+    return [search_agent, python_agent, cal_agent, memory_agent, browser_agent]

@@ -17,4 +17,5 @@ dependencies = [
     "websockets>=16.0",
     "qdrant-client>=1.18.0",
     "pymongo>=4.17.0",
+    "playwright>=1.60.0",
 ]

@@ -24,13 +24,37 @@ Multi-agent chat app: Python FastAPI + strands Swarm backend, vanilla JS fronten
 ## Structure
 
 ```
-backend/         FastAPI WebSocket server
-  agents/         Agent definitions (4 sub-agents: Search, Python, Calendar, Memory)
-  mcp_servers/    MCP tool clients (rival_search, python_executor via stdio, remote_time, cal_mcp via stdio)
-  services/       chat_with_agent() — wires swarm + agents + tools
-  utils/          LLM model factory, Langfuse client
-  main.py         FastAPI app, WebSocket /ws endpoint, event processing
-frontend/        Vanilla HTML/CSS/JS chat UI
+backend/
+  agents/              Agent definitions
+    all_agents.py        get_sub_agents() — factory for 5 sub-agents
+    orchestrator.py      create_orchestrator() — wires agents + tools per session
+    memory_graph.py      Memory Graph (extract → store → verify)
+  container.py         DI container wiring everything together
+  config.py            Config from .env
+  main.py              FastAPI app, /ws endpoint
+  mcp_servers/         MCP client connections (stdio/HTTP)
+    local_servers.py     python_server (stdio), playwright_client (stdio/HTTP)
+    remote_servers.py    rival_search_mcp_client, remote_time_client (HTTP)
+    python_executor.py   Python code execution MCP server (FastMCP, stdio)
+  services/            Business logic
+    chat.py              Chat service — orchestrator per session + streaming
+    confirmation.py      Human-in-the-loop via WebSocket
+  tools/               Tool definitions
+    browser_server.py    Playwright browser automation MCP server (FastMCP, stdio)
+    cal_com.py           Cal.com REST API tools
+    vector_search.py     Qdrant vector search tools
+    scratchpad.py        Agent scratchpad tool
+  utils/               Utilities
+    get_tools.py         get_mcp_tools() — loads MCP tools from clients
+    llm.py               LLM model factory
+    langfuse.py          Langfuse client init
+  vector_store/        Vector storage
+    base.py              Abstract VectorStore
+    qdrant.py            Qdrant implementation
+  session_manager/     Session persistence
+    mongo_session_repository.py
+
+frontend/              Vanilla HTML/CSS/JS chat UI
   index.html, script.js, style.css
 ```
 
@@ -39,6 +63,7 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 - Python 3.11 (`.python-version`)
 - `uv` package manager (brew-installed, not in venv). Run commands from `backend/`.
 - Create `backend/.env` with: `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`, `LANGFUSE_SECRET_KEY` (plus `LANGFUSE_PUBLIC_KEY` if needed).
+- Node.js 18+ with `npx` for Playwright MCP (Browser Agent). Install Firefox: `npx @playwright/mcp@latest install-browser firefox`
 
 ## Commands (run from `backend/`)
 
@@ -48,17 +73,19 @@ frontend/        Vanilla HTML/CSS/JS chat UI
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |
+| Install Playwright Firefox | `npx @playwright/mcp@latest install-browser firefox` |
 
 No test framework, no lint/typecheck config.
 
 ## Architecture
 
 - **Entrypoint**: `backend/main.py` — FastAPI app with `lifespan` that loads MCP tools, single WebSocket endpoint at `/ws`.
-- **Swarm**: Created per-query in `chat_with_agent()`. 4 sub-agents (Search, Python, Calendar, Memory) + Initial Agent. Time tools wired directly into Initial Agent. `max_handoffs=10`, `max_iterations=20`.
+- **Swarm**: Created per-query in `chat_with_agent()`. 5 sub-agents (Search, Python, Calendar, Memory, Browser) + Initial Agent. Time tools wired directly into Initial Agent. `max_handoffs=10`, `max_iterations=20`.
 - **DI**: `dependency-injector` `Container` provides `LLM` model singleton wired into agent constructors.
 - **LLM**: `OpenAIModel` from strands (supports any OpenAI-compatible provider via `base_url`).
 - **Langfuse**: Initialized at module level in `main.py` on import.
 - **MCP tools**: Loaded once in `lifespan` and cached; `chat_with_agent` re-calls `load_tools()` (returns cached).
+- **Browser Agent (Playwright)**: Uses `@playwright/mcp` via stdio with Firefox. Set `BROWSER_HEADLESS=true` for headless mode (WSL). Set `PLAYWRIGHT_MCP_URL=http://<windows-ip>:8931/mcp` to connect to a remote Playwright MCP server instead of stdio.
 - **Event flow**: Swarm yields `TypedEvent` dicts → `_process_event()` maps to `{"type": ...}` messages → WebSocket sends JSON array to frontend.
 - **Cal.com**: `CAL_API_KEY` must be set in `.env` — generate one at [app.cal.com/settings/developer/api-keys](https://app.cal.com/settings/developer/api-keys).
 

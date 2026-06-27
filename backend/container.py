@@ -5,7 +5,7 @@ from session_manager.mongo_session_repository import MongoSessionRepository
 from utils.llm import get_llm_model
 from agents.all_agents import get_sub_agents
 from utils.get_tools import get_mcp_tools
-from mcp_servers.local_servers import python_server
+from mcp_servers.local_servers import python_server, playwright_client
 from tools.cal_com import make_cal_tools
 from mcp_servers.remote_servers import rival_search_mcp_client, remote_time_client
 from tools.vector_search import make_memory_tools
@@ -19,6 +19,7 @@ AVAILABLE TOOL AGENTS:
 - python_agent: Calculations, data processing, code execution, math problems. Use when the user needs computation or code.
 - cal_agent: Calendar scheduling, bookings, event types, availability. Use for anything involving meetings, events, or scheduling.
 - memory_agent: Storing or retrieving personal user facts (name, age, relationships, preferences, location, goals). Use when the user shares personal information or asks about stored information.
+- browser_agent: Web browsing, page interaction, form filling, scraping. Use when the user needs to visit a website, interact with a page, or extract live data from the web.
 
 DIRECT TOOLS (call these yourself without a sub-agent):
 - currentDateTimeAndTimezone — get the live current date/time
@@ -36,6 +37,7 @@ RULES:
 def _create_sub_agent_bundle(llm_model, vector_store):
     search_tools = get_mcp_tools(rival_search_mcp_client)
     python_tools = get_mcp_tools(python_server)
+    browser_tools = get_mcp_tools(playwright_client)
     time_tools = get_mcp_tools(remote_time_client)
     try:
         cal_tools = make_cal_tools()
@@ -45,11 +47,11 @@ def _create_sub_agent_bundle(llm_model, vector_store):
     memory_graph = create_memory_graph(llm_model, vector_store)
     memory_storage_tool = make_memory_graph_tool(memory_graph)
 
-    search_agent, python_agent, cal_agent, memory_agent = get_sub_agents(
-        search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model
+    search_agent, python_agent, cal_agent, memory_agent, browser_agent = get_sub_agents(
+        search_tools, python_tools, cal_tools, memory_tools, memory_storage_tool, llm_model, browser_tools
     )
 
-    return (search_agent, python_agent, cal_agent, memory_agent, time_tools)
+    return (search_agent, python_agent, cal_agent, memory_agent, browser_agent, time_tools)
 
 
 def _make_chat(sub_agent_bundle, session_repo, llm_model):

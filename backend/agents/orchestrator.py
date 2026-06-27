@@ -3,7 +3,7 @@ from strands.session.repository_session_manager import RepositorySessionManager
 
 
 def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt, session_id):
-    search_agent, python_agent, cal_agent, memory_agent, time_tools = sub_agent_bundle
+    search_agent, python_agent, cal_agent, memory_agent, browser_agent, time_tools = sub_agent_bundle
     session_manager = RepositorySessionManager(
         session_id=session_id,
         session_repository=session_repo,
@@ -29,6 +29,10 @@ def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt
             memory_agent.as_tool(
                 name="memory_agent",
                 description="Storing or retrieving personal user facts."
+            ),
+            browser_agent.as_tool(
+                name="browser_agent",
+                description="Web browsing, page interaction, form filling, scraping via Playwright (Firefox)."
             ),
         ] + time_tools,
         session_manager=session_manager,
