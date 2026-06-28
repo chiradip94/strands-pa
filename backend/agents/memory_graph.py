@@ -109,11 +109,18 @@ Return one fact per line as a numbered list. Only extract facts about the user o
 
 Skip: general knowledge, questions the user asks, current events.
 
+When the user CORRECTS a previous fact, extract only the corrected fact. Ignore apologies, negations, and conversational filler.
+
 Example:
-User: My brother is Raj, he is 2.5 years older to me
+User: My brother is [Name], he is 2.5 years older to me
 Output:
-1. User's brother is Raj
-2. Raj is 2.5 years older than the user""",
+1. User's brother is [Name]
+2. [Name] is 2.5 years older than the user
+
+Example:
+User: Sorry, my name is [Name] (not [OldName])
+Output:
+1. User's name is [Name]""",
         tools=[],
     )
 
@@ -141,6 +148,11 @@ Output:
                 stored = []
                 for fact in facts:
                     existing = self.vector_store.search(fact, top_k=10)
+                    for r in existing:
+                        if r["score"] >= 0.4:
+                            old_text = r["metadata"].get("original_text", "").strip().lower()
+                            if old_text and old_text != fact.strip().lower():
+                                self.vector_store.delete(r["id"])
                     is_dup = any(
                         r["metadata"].get("original_text", "").strip().lower() == fact.strip().lower()
                         for r in existing if r["score"] >= 0.3

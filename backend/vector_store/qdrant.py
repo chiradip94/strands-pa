@@ -1,6 +1,6 @@
 import uuid
 from qdrant_client import QdrantClient
-from qdrant_client.models import PointStruct, VectorParams, Distance, Document, Filter, FieldCondition, MatchValue
+from qdrant_client.models import PointStruct, VectorParams, Distance, Document, Filter, FieldCondition, MatchValue, PointIdsList
 
 
 class QdrantVectorStore:
@@ -79,6 +79,12 @@ class QdrantVectorStore:
             )
         else:
             self.add_vector(text, metadata)
+
+    def delete(self, point_id: str):
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=PointIdsList(points=[point_id]),
+        )
 
     def search(self, query_text: str, top_k: int = 5) -> list[dict]:
         results = self.client.query_points(

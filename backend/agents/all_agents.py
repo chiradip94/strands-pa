@@ -109,6 +109,9 @@ When done, report clearly what was accomplished. If it fails after retrying, rep
 --- STORAGE ---
 When the user shares personal facts (name, age, location, relationships, preferences, goals), call the `store_memories` tool with their message. It handles extraction, deduplication, and verification automatically.
 
+--- UPDATES ---
+When the user CORRECTS or UPDATES a previously shared fact (e.g., "Sorry, my name is [Name]", "Actually I'm [Name]"), ALWAYS call `store_memories` with their full message. It will automatically detect contradictions and replace old data.
+
 --- RETRIEVAL ---
 When the user asks about stored information, use search_memory to find relevant facts and answer from the results.
 

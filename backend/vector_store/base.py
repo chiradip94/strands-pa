@@ -8,3 +8,6 @@ class VectorStore:
     
     def update(self, text: str, metadata: dict, point_id: str | None = None):
         raise NotImplementedError
+
+    def delete(self, point_id: str):
+        raise NotImplementedError
