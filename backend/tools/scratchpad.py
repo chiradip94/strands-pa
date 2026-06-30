@@ -59,7 +59,7 @@ def scratchpad(action: str, content: str = "", filename: str = "", tool_context:
                 continue
             # match either "- [ ] task" or "- task" (plain bullet)
             m = re.match(r"^(\s*-\s*)(?:\[\s*\]\s*)?(.*)", line)
-            if m and content in line:
+            if m and content.strip().lower() in line.lower():
                 indent = m.group(1)
                 task_text = m.group(2)
                 lines[i] = f"{indent}[x] ~~{task_text}~~"

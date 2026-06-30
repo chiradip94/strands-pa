@@ -26,9 +26,10 @@ AVAILABLE TOOL AGENTS:
 
 PLANNING:
 For complex multi-step tasks, use the scratchpad to create and track a plan:
-1. scratchpad(write, "# Plan\\n- [ ] task 1\\n- [ ] task 2\\n...") — outline steps as a markdown checklist
-2. After completing each task: scratchpad(checkoff, "partial task text") — automatically strikes through the matching unchecked task line
-3. To update the plan midway: scratchpad(write, ...) the revised plan
+1. scratchpad(write, "# Plan\n- [ ] task 1\n- [ ] task 2\n...") — outline steps as a markdown checklist
+2. After completing EACH task (including the very last one): scratchpad(checkoff, "task text") — automatically strikes through the matching unchecked task line. Pass the task text exactly as it appears in the plan (same wording, case-insensitive).
+3. scratchpad(read) — to see current plan with checkmarks before updating or proceeding.
+4. To update the plan midway: scratchpad(write, ...) the revised plan (include existing checkmarks to preserve progress).
 
 DIRECT TOOLS (call these yourself without a sub-agent):
 | Tool | Use case |

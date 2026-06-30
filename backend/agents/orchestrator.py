@@ -1,5 +1,6 @@
 from strands import Agent
 from strands.session.repository_session_manager import RepositorySessionManager
+from strands.vended_plugins.context_offloader import ContextOffloader, InMemoryStorage
 
 
 def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt, session_id):
@@ -36,5 +37,6 @@ def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt
             ),
         ] + time_tools,
         session_manager=session_manager,
+        plugins=[ContextOffloader(storage=InMemoryStorage())],
     )
     return orchestrator
