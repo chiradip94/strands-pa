@@ -20,6 +20,7 @@ let currentAgentText = '';
 let currentReasoningText = '';
 let autoReconnect = true;
 let pendingConfirmation = false;
+let isStreaming = false;
 
 function connect(sessionId) {
     autoReconnect = true;
@@ -269,6 +270,8 @@ function handleAgentEvent(msg) {
 
         case 'done':
             thinkingIndicator.classList.add('hidden');
+            document.getElementById('stop-btn').classList.add('hidden');
+            isStreaming = false;
             enableInput();
             if (currentAgentMessage) {
                 currentAgentMessage.classList.remove('streaming');
@@ -281,13 +284,20 @@ function handleAgentEvent(msg) {
             currentReasoningText = '';
             if (msg.metadata) {
                 const meta = msg.metadata;
-                const metaText = 'Status: ' + meta.status + '  \u2022  Execution time: ' + meta.execution_time + 's';
+                let metaText;
+                if (meta.status === 'CANCELLED') {
+                    metaText = '\u26A0\uFE0F Stopped by user';
+                } else {
+                    metaText = 'Status: ' + meta.status + '  \u2022  Execution time: ' + meta.execution_time + 's';
+                }
                 createMessageElement('system', '\uD83D\uDCCA ' + metaText);
             }
             break;
 
         case 'summarized':
             thinkingIndicator.classList.add('hidden');
+            document.getElementById('stop-btn').classList.add('hidden');
+            isStreaming = false;
             currentAgentMessage = null;
             currentAgentText = '';
             currentReasoningText = '';
@@ -298,6 +308,8 @@ function handleAgentEvent(msg) {
         default:
             if (msg.error) {
                 thinkingIndicator.classList.add('hidden');
+                document.getElementById('stop-btn').classList.add('hidden');
+                isStreaming = false;
                 enableInput();
                 createMessageElement('agent', 'Error: ' + msg.error);
                 currentAgentMessage = null;
@@ -333,10 +345,16 @@ function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;
 }
 
+document.getElementById('stop-btn').addEventListener('click', () => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({type: "stop"}));
+    }
+});
+
 chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const query = userInput.value.trim();
-    if (!query) return;
+    if (!query || isStreaming) return;
 
     currentAgentMessage = null;
     currentAgentText = '';
@@ -344,7 +362,9 @@ chatForm.addEventListener('submit', (e) => {
     createMessageElement('user', query);
 
     if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(query);
+        socket.send(JSON.stringify({text: query}));
+        isStreaming = true;
+        document.getElementById('stop-btn').classList.remove('hidden');
         thinkingIndicator.classList.remove('hidden');
     }
 

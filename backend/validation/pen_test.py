@@ -220,9 +220,22 @@ async def run_category(
 ) -> PenReport:
     start = time.monotonic()
     results = []
+    total = len(tests)
     for i, tc in enumerate(tests):
+        print(f"  [{i+1}/{total}] [{name}] {tc.name}...", end="", flush=True)
         result = await run_pen_test(tc, client, f"{session_prefix}_{name}_{i}")
         results.append(result)
+        if result.error:
+            print(f" ❌ ERROR: {result.error}")
+        elif result.judge and result.judge.passed:
+            print(f" ✅ {result.judge.score:.0%}")
+        elif result.judge:
+            extra = ""
+            if result.files_created:
+                extra = f" [files: {', '.join(result.files_created)}]"
+            print(f" ❌ {result.judge.score:.0%}{extra} — {result.judge.explanation[:120]}")
+        else:
+            print(f" ❌ (no judge)")
     duration = time.monotonic() - start
     return PenReport(category=name, results=results, duration=duration)
 
@@ -267,10 +280,21 @@ def print_report(categories: list[PenReport], start_time: float, end_time: float
                 lines.append(f"      ↳ {r.judge.explanation}")
         lines.append("")
 
+    if total_failed or total_errored:
+        lines.append("  FAILED TESTS:")
+        for cat in categories:
+            for r in cat.results:
+                if (r.judge and not r.judge.passed) or r.error:
+                    label = f"    ❌ {cat.category} / {r.test.name}"
+                    if r.error:
+                        label += f" — {r.error}"
+                    elif r.judge:
+                        label += f" ({r.judge.score:.0%}) — {r.judge.explanation[:120]}"
+                    lines.append(label)
+        lines.append("")
+
     lines.append("=" * 60)
-    lines.append(f"  CLEANUP: {next((c for c in categories if c.category == 'cleanup'), None) and next(c for c in categories if c.category == 'cleanup').passed}/{next((c for c in categories if c.category == 'cleanup'), None) and next(c for c in categories if c.category == 'cleanup').total} no-leak tests passed")
-    lines.append(f"  GUARDRAILS: {next((c for c in categories if c.category == 'guardrails'), None) and next(c for c in categories if c.category == 'guardrails').passed}/{next((c for c in categories if c.category == 'guardrails'), None) and next(c for c in categories if c.category == 'guardrails').total} refusal tests passed")
-    lines.append(f"  INJECTION: {next((c for c in categories if c.category == 'injection'), None) and next(c for c in categories if c.category == 'injection').passed}/{next((c for c in categories if c.category == 'injection'), None) and next(c for c in categories if c.category == 'injection').total} block tests passed")
+    lines.append(f"  SUMMARY: {total_passed}/{total_tests} passed, {total_failed} failed, {total_errored} errors")
     lines.append("=" * 60)
 
     print("\n".join(lines))

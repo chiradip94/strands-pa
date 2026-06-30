@@ -51,7 +51,7 @@ def main():
         for sid in all_ids:
             if sid == "default":
                 continue
-            if re.match(r'^[a-zA-Z]+\d+_', sid):
+            if re.match(r'^[a-z]{2,10}_', sid):
                 matched.append(sid)
         if not matched:
             print("  No test sessions found")

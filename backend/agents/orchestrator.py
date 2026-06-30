@@ -1,5 +1,6 @@
 from strands import Agent
 from strands.session.repository_session_manager import RepositorySessionManager
+from strands.vended_plugins.context_offloader import ContextOffloader, InMemoryStorage
 
 
 def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt, session_id):
@@ -16,7 +17,7 @@ def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt
         tools=[
             search_agent.as_tool(
                 name="search_agent",
-                description="Web research, news, social media, content analysis, scientific research."
+                description="Web search and text-based research. CANNOT visit interactive websites, get live prices from booking/travel sites, render JavaScript pages, or interact with forms. For those, use browser_agent."
             ),
             python_agent.as_tool(
                 name="python_agent",
@@ -32,9 +33,10 @@ def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt
             ),
             browser_agent.as_tool(
                 name="browser_agent",
-                description="Web browsing, page interaction, form filling, scraping via Playwright (Firefox)."
+                description="Visit and interact with live websites. Use for: getting live prices from booking/travel/hotel sites, JS-heavy SPAs, form filling, login flows, multi-tab research, scraping rendered content. This is the ONLY tool that can handle interactive websites."
             ),
         ] + time_tools,
         session_manager=session_manager,
+        plugins=[ContextOffloader(storage=InMemoryStorage())],
     )
     return orchestrator

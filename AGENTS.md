@@ -43,7 +43,7 @@ backend/
     browser_server.py    Playwright browser automation MCP server (FastMCP, stdio)
     cal_com.py           Cal.com REST API tools
     vector_search.py     Qdrant vector search tools
-    scratchpad.py        Agent scratchpad tool
+    scratchpad.py        Agent scratchpad tool (planning + notes, wired into orchestrator)
   utils/               Utilities
     get_tools.py         get_mcp_tools() — loads MCP tools from clients
     llm.py               LLM model factory
@@ -69,7 +69,7 @@ frontend/              Vanilla HTML/CSS/JS chat UI
 
 | Action | Command |
 |---|---|
-| Dev server | `uv run uvicorn app:app --host 0.0.0.0 --port 8000 --reload` |
+| Dev server | `uv run uvicorn app:app --host 0.0.0.0 --port 8000 --reload --reload-exclude validation/` |
 | Frontend | `cd frontend && python3 -m http.server 8080` |
 | Test swarm events | `uv run python test_swarm_events.py` |
 | Test WS client | `uv run python test_ws.py` |
@@ -80,7 +80,7 @@ No test framework, no lint/typecheck config.
 ## Architecture
 
 - **Entrypoint**: `backend/main.py` — FastAPI app with `lifespan` that loads MCP tools, single WebSocket endpoint at `/ws`.
-- **Swarm**: Created per-query in `chat_with_agent()`. 5 sub-agents (Search, Python, Calendar, Memory, Browser) + Initial Agent. Time tools wired directly into Initial Agent. `max_handoffs=10`, `max_iterations=20`.
+- **Swarm**: Created per-query in `chat_with_agent()`. 5 sub-agents (Search, Python, Calendar, Memory, Browser) + Initial Agent. Time tools + scratchpad + file_ops + http_request wired directly into Initial Agent. `max_handoffs=10`, `max_iterations=20`.
 - **DI**: `dependency-injector` `Container` provides `LLM` model singleton wired into agent constructors.
 - **LLM**: `OpenAIModel` from strands (supports any OpenAI-compatible provider via `base_url`).
 - **Langfuse**: Initialized at module level in `main.py` on import.

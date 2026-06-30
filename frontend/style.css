@@ -419,6 +419,30 @@ footer {
     height: 20px;
 }
 
+#stop-btn {
+    background: var(--accent-red);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+#stop-btn:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+#stop-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
 #confirmation-banner {
     display: flex;
     align-items: center;
