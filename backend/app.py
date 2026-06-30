@@ -1,3 +1,5 @@
+import asyncio
+import json
 import signal
 import sys
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -79,29 +81,60 @@ def _process_event(event):
 async def websocket_endpoint(websocket: WebSocket, chat=Provide[Container.chat]):
 
     await websocket.accept()
+    session_id = websocket.query_params.get("session_id", "default")
+    stream_task = None
+
+    async def _stream_chat(query, session_id):
+        with langfuse.start_as_current_observation(as_type="span", name="chat") as span:
+            with propagate_attributes(session_id=session_id):
+                token_send = ws_send.set(websocket.send_json)
+                token_recv = ws_recv.set(websocket.receive_text)
+                try:
+                    async for event in chat.chat_with_agent(query, session_id):
+                        for msg in _process_event(event):
+                            await websocket.send_json(msg)
+                except asyncio.CancelledError:
+                    await websocket.send_json({
+                        "type": "done", "text": "(stopped)",
+                        "metadata": {"status": "CANCELLED", "execution_time": 0}
+                    })
+                except Exception as stream_err:
+                    span.update(level="ERROR", status_message=str(stream_err))
+                    print(f"Streaming error: {stream_err}")
+                    await websocket.send_json({"error": str(stream_err)})
+                finally:
+                    ws_send.reset(token_send)
+                    ws_recv.reset(token_recv)
+        langfuse.flush()
+
     try:
         while True:
-            query = await websocket.receive_text()
-            session_id = websocket.query_params.get("session_id", "default")
-            with langfuse.start_as_current_observation(as_type="span", name="chat") as span:
-                with propagate_attributes(session_id=session_id):
-                    try:
-                        token_send = ws_send.set(websocket.send_json)
-                        token_recv = ws_recv.set(websocket.receive_text)
-                        try:
-                            async for event in chat.chat_with_agent(query, session_id):
-                                for msg in _process_event(event):
-                                    await websocket.send_json(msg)
-                        finally:
-                            ws_send.reset(token_send)
-                            ws_recv.reset(token_recv)
-                    except Exception as stream_err:
-                        span.update(level="ERROR", status_message=str(stream_err))
-                        print(f"Streaming error: {stream_err}")
-                        await websocket.send_json({"error": str(stream_err)})
-            langfuse.flush()
+            raw = await websocket.receive_text()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                data = {"text": raw}
+
+            msg_type = data.get("type", "")
+
+            if msg_type == "stop":
+                if stream_task and not stream_task.done():
+                    stream_task.cancel()
+                    stream_task = None
+                continue
+
+            query = data.get("text", "")
+            if not query:
+                continue
+
+            if stream_task and not stream_task.done():
+                stream_task.cancel()
+
+            stream_task = asyncio.create_task(_stream_chat(query, session_id))
 
     except WebSocketDisconnect:
+        if stream_task and not stream_task.done():
+            stream_task.cancel()
         print("Client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
