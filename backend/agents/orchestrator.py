@@ -32,7 +32,7 @@ def create_orchestrator(sub_agent_bundle, session_repo, llm_model, system_prompt
             ),
             browser_agent.as_tool(
                 name="browser_agent",
-                description="Web browsing, page interaction, form filling, scraping via Playwright (Firefox)."
+                description="Web browsing, JS-heavy/SPA page rendering, form filling, scraping, screenshots, multi-tab research, login flows via Playwright (Firefox)."
             ),
         ] + time_tools,
         session_manager=session_manager,

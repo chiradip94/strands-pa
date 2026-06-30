@@ -104,6 +104,21 @@ class Report:
                     lines.append(f"      ↳ {tr.judge.explanation}")
             lines.append("")
 
+        if self.total_failed or self.total_errored:
+            lines.append("  FAILED TESTS:")
+            for suite in self.suites:
+                for tr in suite.tests:
+                    if (tr.judge and not tr.judge.passed) or tr.error:
+                        label = f"    ❌ {suite.name} / {tr.test.name}"
+                        if tr.error:
+                            label += f" — {tr.error}"
+                        elif tr.judge:
+                            label += f" ({tr.judge.score:.0%}) — {tr.judge.explanation}"
+                        lines.append(label)
+            lines.append("")
+
+        lines.append("=" * 60)
+        lines.append(f"  SUMMARY: {self.total_passed}/{self.total_tests} passed, {self.total_failed} failed, {self.total_errored} errors")
         lines.append("=" * 60)
         return "\n".join(lines)
 
@@ -187,12 +202,22 @@ async def run_test(
             actual_response=resp.text,
             tools_used=resp.tool_uses,
         )
-        return TestResult(test=tc, suite="", response=resp, judge=judge, duration=duration)
+        result = TestResult(test=tc, suite="", response=resp, judge=judge, duration=duration)
     except Exception as e:
         duration = time.monotonic() - start
-        return TestResult(
+        result = TestResult(
             test=tc, suite="", response=WsResponse(), error=str(e), duration=duration
         )
+
+    # Cleanup: revert any state changes regardless of test outcome
+    if tc.cleanup_prompt:
+        cleanup_sid = f"{session_id}_cleanup"
+        try:
+            await client.send(tc.cleanup_prompt, session_id=cleanup_sid)
+        except Exception:
+            pass  # best-effort cleanup
+
+    return result
 
 
 async def run_suite(
@@ -204,10 +229,23 @@ async def run_suite(
     start = time.monotonic()
     session_id = f"{session_prefix}_{name}"
     results = []
+    total = len(tests)
     for i, tc in enumerate(tests):
+        print(f"  [{i+1}/{total}] {tc.name}...", end="", flush=True)
         result = await run_test(tc, client, f"{session_id}_{i}")
         result.suite = name
         results.append(result)
+        if result.error:
+            print(f" ❌ ERROR: {result.error}")
+        elif result.judge and result.judge.passed:
+            print(f" ✅ {result.judge.score:.0%}", end="")
+        elif result.judge:
+            print(f" ❌ {result.judge.score:.0%} — {result.judge.explanation}", end="")
+        else:
+            print(f" ❌ (no judge)", end="")
+        if tc.cleanup_prompt:
+            print(f" 🧹", end="")
+        print()
     duration = time.monotonic() - start
     return SuiteResult(name=name, tests=results, duration=duration)
 

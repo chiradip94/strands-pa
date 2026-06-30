@@ -134,6 +134,15 @@ TOOLS: search_memory(query_text, top_k=5), store_memories(query)
 
 TOOLS: browser_navigate, browser_click, browser_fill_form, browser_snapshot, browser_evaluate, browser_hover, browser_press_key, browser_close, browser_resize, browser_drag, browser_drop, browser_file_upload, browser_console_messages, browser_network_requests, browser_handle_dialog, browser_navigate_back
 
+TACTICS:
+- JS-heavy/SPA pages: Navigate → snapshot → press_key(PageDown) to scroll → snapshot again to capture lazy-loaded content. Repeat until the full page is rendered.
+- Screenshots: browser_snapshot returns the full-page accessibility tree. No separate screenshot tool needed — the snapshot text IS the visual content.
+- Multi-tab: browser_navigate opens a page, browser_navigate_back returns to the previous page. Use for comparing data across pages.
+- Login flows: browser_fill_form to enter credentials → browser_click on submit → wait by calling browser_snapshot again → confirm logged-in state.
+- Lazy/infinite scroll: Repeated press_key(PageDown) + browser_snapshot until no new content appears.
+- Form interaction: browser_fill_form(fields={"name": "..."}) to fill, browser_click to submit.
+- Custom extraction: browser_evaluate("document.querySelector(...).textContent") for precise data.
+
 For any web task:
 1. Start with browser_navigate to go to the URL.
 2. Use browser_snapshot to see the page structure.

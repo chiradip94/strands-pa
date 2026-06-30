@@ -46,9 +46,12 @@ def _process_event(event):
     elif "event" in event:
         chunk = event["event"]
         if "contentBlockStart" in chunk:
-            start = chunk["contentBlockStart"]
-            if "toolUse" in start:
-                msgs.append({"type": "tool_start", "tool_name": start["toolUse"].get("name", "")})
+            cbs = chunk["contentBlockStart"]
+            # OpenAI adapter nests toolUse under "start": {"start": {"toolUse": {...}}}
+            # Anthropic/Bedrock nests toolUse directly: {"toolUse": {...}}
+            tool_container = cbs.get("start", cbs)
+            if "toolUse" in tool_container:
+                msgs.append({"type": "tool_start", "tool_name": tool_container["toolUse"].get("name", "")})
 
     # Sub-agent streaming (AgentAsToolStreamEvent / ToolStreamEvent)
     elif event_type == "tool_stream":

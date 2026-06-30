@@ -8,3 +8,4 @@ class TestCase:
     expected_behavior: str
     min_score: float = 0.7
     tags: list[str] = field(default_factory=list)
+    cleanup_prompt: str = ""
